@@ -1,0 +1,30 @@
+# Local development overrides — applied automatically by docker-compose.
+# Enables hot-reload via bind mounts and exposes ports for direct DB/MinIO access.
+
+services:
+  db:
+    ports:
+      - "5432:5432"   # Direct psql access: psql -h localhost -U $POSTGRES_USER expense_tracker
+
+  storage:
+    ports:
+      - "9000:9000"   # MinIO S3 API
+      - "9001:9001"   # MinIO web console: http://localhost:9001
+
+  api:
+    build:
+      target: development
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./backend/src:/app/src:ro   # Hot-reload via nodemon watching src/
+    ports:
+      - "3001:3001"   # Direct API access (bypasses web proxy)
+
+  web:
+    build:
+      target: development
+    ports:
+      - "3000:3000"   # Vite dev server
+    volumes:
+      - ./web/src:/app/src:ro

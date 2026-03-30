@@ -1,29 +1,103 @@
-# expense-tracker Development Guidelines
+# expense-tracker
 
-Auto-generated from all feature plans. Last updated: 2026-03-29
+A self-hosted shared household expense tracker. Four-package npm workspace monorepo.
 
-## Active Technologies
+## Packages
 
-- TypeScript 5.4, Node.js 20 LTS (backend + shared), React 18 (web), React Native via Expo SDK 51 (iOS) + Express 4, PostgreSQL 16, MinIO, Zustand, Recharts, Victory Native, ws (WebSocket), Resend (email), Expo Notifications (001-expense-tracker-app)
+| Package | Purpose |
+|---------|---------|
+| `backend/` | Express 4 + TypeScript REST API + WebSocket server |
+| `web/` | React 18 + Vite + TailwindCSS web app |
+| `mobile/` | Expo SDK 51 iOS app (React Native) |
+| `shared/` | Settlement calculator + typed API client (shared by web + mobile) |
+
+## Key Technology Decisions
+
+- **PostgreSQL 16** via plain `pg` driver — no ORM. Typed queries via `db.query<T>()` wrapper in `backend/src/db/client.ts`
+- **JWT auth**: 15min access token (Bearer) + 30-day rotating refresh token (httpOnly cookie)
+- **Monetary amounts**: all stored and computed as integers in øre (100 øre = 1 NOK). Non-integer amounts are rejected
+- **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
+- **Receipt parsing**: Anthropic `claude-sonnet-4-20250514` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
+- **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
+- **Realtime sync**: WebSocket server in `backend/src/ws/server.ts`, household-scoped rooms
 
 ## Project Structure
 
-```text
-src/
-tests/
+```
+backend/src/
+  api/
+    routes/        auth, users, households, receipts, expenses, settlements, projects, statistics
+    middleware/    auth.ts (JWT), error.ts (AppError → JSON)
+  db/
+    client.ts      typed pg wrapper
+    migrate.ts     migration runner
+    migrations/    001_create_all_tables.sql, 002_create_indexes.sql
+  services/        email.ts, receiptParser.ts, tagMatcher.ts, notifications.ts
+  storage/         minio.ts
+  ws/              server.ts
+
+web/src/
+  pages/
+    Auth/          Register, Login, AcceptInvite
+    Onboarding/    CreateHousehold
+    Expenses/      ExpenseList, ExpenseDetail, AddExpense
+    Settlement/    CurrentMonth, History
+    Projects/      ProjectList, ProjectDetail, CreateProject
+    Settings/      MembersAndCards
+    Statistics/    MonthlyOverview, CategoryTrends
+  components/      AuthShell, Button, FormField
+  stores/          authStore, householdStore, expenseStore, settlementStore, projectStore, statsStore
+  App.tsx          React Router routes + auth guards
+
+shared/src/
+  api-client/      index.ts — typed fetch wrapper, 401 auto-refresh
+  calc/            settlement.ts — calculateSettlement()
+
+mobile/src/        Expo Router screens (iOS only)
 ```
 
 ## Commands
 
-npm test && npm run lint
+```bash
+# Install all workspace dependencies
+npm install
 
-## Code Style
+# Run database migrations
+cd backend && npm run migrate
 
-TypeScript 5.4, Node.js 20 LTS (backend + shared), React 18 (web), React Native via Expo SDK 51 (iOS): Follow standard conventions
+# Start development (hot-reload via docker-compose.override.yml)
+docker-compose up
 
-## Recent Changes
+# Backend only
+cd backend && npm run dev
 
-- 001-expense-tracker-app: Added TypeScript 5.4, Node.js 20 LTS (backend + shared), React 18 (web), React Native via Expo SDK 51 (iOS) + Express 4, PostgreSQL 16, MinIO, Zustand, Recharts, Victory Native, ws (WebSocket), Resend (email), Expo Notifications
+# Web only
+cd web && npm run dev
 
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+# Lint + format check
+npm run lint && npm run format:check
+
+# Build all packages
+npm run build
+```
+
+## Environment Variables
+
+Copy `.env.example` → `.env` and fill in values before running.
+
+Required: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+
+## Financial Accuracy Rules (NON-NEGOTIABLE)
+
+1. All amounts are stored as integers in **øre** — never floats
+2. Settlement shares use **basis points** (10,000 = 100%)
+3. Rounding remainder always goes to the **admin** (first member)
+4. The `unitPriceOre` field must pass `Number.isInteger()` — the API rejects floats with 400
+
+## SDD Artifacts
+
+Full specification in `../specs/001-expense-tracker-app/`:
+- `.specify/constitution.md` — project rules and tech stack
+- `spec.md` — user stories and acceptance criteria
+- `plan.md` — architecture decisions
+- `tasks.md` — 69 tasks, all complete ✓

@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Expense Tracker",
+    "slug": "expense-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "expense-tracker",
+    "platforms": ["ios"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "no.expensetracker.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        { "photosPermission": "Allow Expense Tracker to access your photos for receipt scanning." }
+      ]
+    ]
+  }
+}

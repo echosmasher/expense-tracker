@@ -1,0 +1,9 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@expense-tracker/shared": ["../shared/src/index.ts"]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@expense-tracker/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@expense-tracker/shared": "*",
+    "expo": "~51.0.0",
+    "expo-router": "~3.5.0",
+    "expo-image-picker": "~15.0.0",
+    "expo-notifications": "~0.28.0",
+    "expo-secure-store": "~13.0.0",
+    "react": "18.2.0",
+    "react-native": "0.74.0",
+    "victory-native": "^41.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@types/react": "~18.2.0",
+    "typescript": "^5.4.0"
+  }
+}
