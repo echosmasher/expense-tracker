@@ -158,7 +158,7 @@ export function ProjectDetail() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
-        .project-detail-page { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 5rem; font-family: 'Geist', sans-serif; color: #f4f4f5; background: #09090b; min-height: 100dvh; }
+        .project-detail-page { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
         .pd-topbar { margin-bottom: 1.25rem; }
         .back-btn { background: none; border: none; color: #818cf8; font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; }
         .pd-msg { color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }

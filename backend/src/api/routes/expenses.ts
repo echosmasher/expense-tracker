@@ -158,8 +158,30 @@ router.get('/', async (req, res, next) => {
 
     query += ' ORDER BY e.expense_date DESC, e.created_at DESC'
 
-    const result = await db.query(query, params)
-    res.json({ expenses: result.rows })
+    const result = await db.query<{
+      id: string
+      purchased_by: string
+      store: string | null
+      expense_date: string | null
+      total_amount_ore: number
+      card_last_four: string | null
+      status: string
+      created_at: Date
+      purchaser_name: string
+    }>(query, params)
+    res.json({
+      expenses: result.rows.map((r) => ({
+        id: r.id,
+        purchasedBy: r.purchased_by,
+        purchaserName: r.purchaser_name,
+        store: r.store,
+        date: r.expense_date,
+        totalAmountOre: Number(r.total_amount_ore),
+        cardLastFour: r.card_last_four,
+        status: r.status,
+        createdAt: r.created_at,
+      })),
+    })
   } catch (err) {
     next(err)
   }

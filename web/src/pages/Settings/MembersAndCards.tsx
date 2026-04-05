@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { users, households } from '@expense-tracker/shared'
-import type { UserProfile } from '@expense-tracker/shared'
+import type { UserProfile, Household } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { Button } from '../../components/Button'
 import { FormField, Input } from '../../components/FormField'
@@ -151,10 +151,98 @@ function InviteModal({ householdId, onClose }: { householdId: string; onClose: (
   )
 }
 
+// ─── Allocation Key Editor ────────────────────────────────────────────────────
+
+function AllocationKeyEditor({ household, onSaved }: { household: Household; onSaved: (h: Household) => void }) {
+  const initial = household.members.map((m) => {
+    const share = household.currentAllocationKey.find((s) => s.userId === m.userId)
+    return { userId: m.userId, name: m.name, pct: share ? share.shareBp / 100 : 0 }
+  })
+  const [rows, setRows] = useState(initial)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const total = rows.reduce((s, r) => s + (Number.isFinite(r.pct) ? r.pct : 0), 0)
+  const valid = total === 100 && rows.every((r) => r.pct >= 0)
+
+  function updateRow(userId: string, raw: string) {
+    setSaved(false)
+    const pct = raw === '' ? NaN : parseFloat(raw)
+    setRows((prev) => prev.map((r) => (r.userId === userId ? { ...r, pct } : r)))
+  }
+
+  async function handleSave() {
+    if (!valid) { setError('Shares must sum to 100%'); return }
+    setLoading(true)
+    setError(null)
+    try {
+      const updated = await households.update(household.id, {
+        newAllocationKey: rows.map((r) => ({ userId: r.userId, shareBp: Math.round(r.pct * 100) })),
+      })
+      onSaved(updated)
+      setSaved(true)
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update allocation key.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="alloc-editor">
+      <p className="alloc-editor-hint">
+        How household expenses are split between members. Changes apply to future settlements only.
+      </p>
+      <div className="alloc-editor-rows">
+        {rows.map((r) => (
+          <div key={r.userId} className="alloc-editor-row">
+            <span className="alloc-editor-name">{r.name}</span>
+            <div className="alloc-editor-input-wrap">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={Number.isFinite(r.pct) ? String(r.pct) : ''}
+                onChange={(e) => updateRow(r.userId, e.target.value)}
+              />
+              <span className="alloc-editor-pct">%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="alloc-editor-footer">
+        <span className={`alloc-editor-total ${total === 100 ? 'alloc-editor-total--ok' : 'alloc-editor-total--bad'}`}>
+          Total: {total.toFixed(2)}%
+        </span>
+        <Button onClick={handleSave} loading={loading} disabled={!valid}>Save</Button>
+      </div>
+      {error && <p className="alloc-editor-error">{error}</p>}
+      {saved && !error && <p className="alloc-editor-saved">Saved.</p>}
+      <style>{`
+        .alloc-editor-hint { font-size: 0.78rem; color: #71717a; margin: 0 0 0.75rem; line-height: 1.5; }
+        .alloc-editor-rows { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
+        .alloc-editor-row { display: flex; align-items: center; gap: 0.75rem; }
+        .alloc-editor-name { flex: 1; color: #f4f4f5; font-size: 0.9rem; }
+        .alloc-editor-input-wrap { position: relative; width: 100px; }
+        .alloc-editor-pct { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #71717a; font-size: 0.875rem; pointer-events: none; }
+        .alloc-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+        .alloc-editor-total { font-size: 0.85rem; font-family: 'DM Mono', monospace; }
+        .alloc-editor-total--ok { color: #4ade80; }
+        .alloc-editor-total--bad { color: #f87171; }
+        .alloc-editor-error { color: #f87171; font-size: 0.8rem; margin: 0.5rem 0 0; }
+        .alloc-editor-saved { color: #4ade80; font-size: 0.8rem; margin: 0.5rem 0 0; }
+      `}</style>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function MembersAndCards() {
   const household = useHouseholdStore((s) => s.household)
+  const setHousehold = useHouseholdStore((s) => s.setHousehold)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [showAddCard, setShowAddCard] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
@@ -212,6 +300,16 @@ export function MembersAndCards() {
         )}
       </section>
 
+      {/* ── Allocation Key ────────────────────────────────────────── */}
+      {household && household.members.length > 0 && (
+        <section className="settings-section">
+          <div className="settings-section-header">
+            <h2 className="settings-section-title">Allocation key</h2>
+          </div>
+          <AllocationKeyEditor household={household} onSaved={setHousehold} />
+        </section>
+      )}
+
       {/* ── Payment Cards ─────────────────────────────────────────── */}
       <section className="settings-section">
         <div className="settings-section-header">
@@ -264,9 +362,9 @@ export function MembersAndCards() {
 
       <style>{`
         .settings-page {
-          max-width: 480px;
+          max-width: 720px;
           margin: 0 auto;
-          padding: 1.5rem 1rem;
+          padding: 1.5rem 1rem 2rem;
           display: flex;
           flex-direction: column;
           gap: 2rem;

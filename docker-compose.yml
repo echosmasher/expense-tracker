@@ -33,8 +33,8 @@ services:
 
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -45,7 +45,7 @@ services:
       MINIO_BUCKET: receipts
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@expensetracker.app}
       APP_URL: ${APP_URL:-http://localhost:3000}
@@ -56,7 +56,7 @@ services:
       storage:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -64,11 +64,9 @@ services:
 
   web:
     build:
-      context: ./web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: web/Dockerfile
     restart: unless-stopped
-    ports:
-      - "${PORT:-3000}:80"
     depends_on:
       api:
         condition: service_healthy

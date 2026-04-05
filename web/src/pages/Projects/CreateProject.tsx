@@ -158,10 +158,9 @@ export function CreateProject() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&display=swap');
         .create-project-page {
-          max-width: 480px; margin: 0 auto;
-          padding: 1.25rem 1rem 5rem;
+          max-width: 720px; margin: 0 auto;
+          padding: 1.25rem 1rem 2rem;
           font-family: 'Geist', sans-serif; color: #f4f4f5;
-          background: #09090b; min-height: 100dvh;
         }
         .cp-topbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
         .back-btn { background: none; border: none; color: #818cf8; font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; white-space: nowrap; }

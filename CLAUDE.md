@@ -17,7 +17,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 - **JWT auth**: 15min access token (Bearer) + 30-day rotating refresh token (httpOnly cookie)
 - **Monetary amounts**: all stored and computed as integers in øre (100 øre = 1 NOK). Non-integer amounts are rejected
 - **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
-- **Receipt parsing**: Anthropic `claude-sonnet-4-20250514` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
+- **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
 - **Realtime sync**: WebSocket server in `backend/src/ws/server.ts`, household-scoped rooms
 
@@ -85,7 +85,7 @@ npm run build
 
 Copy `.env.example` → `.env` and fill in values before running.
 
-Required: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
+Required: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
 
 ## Financial Accuracy Rules (NON-NEGOTIABLE)
 

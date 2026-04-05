@@ -161,6 +161,32 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+// ─── GET /households (list mine) ─────────────────────────────────────────────
+router.get('/', async (req, res, next) => {
+  try {
+    const userId = req.user!.userId
+    const result = await db.query<{
+      id: string; name: string; address: string; status: string; current_allocation_key_id: string | null
+    }>(
+      `SELECT h.id, h.name, h.address, h.status, h.current_allocation_key_id
+       FROM households h
+       JOIN household_members hm ON hm.household_id = h.id
+       WHERE hm.user_id = $1
+       ORDER BY hm.joined_at`,
+      [userId]
+    )
+    const households = await Promise.all(
+      result.rows.map(async (h) => {
+        const details = await buildHouseholdResponse(h.id, h.current_allocation_key_id)
+        return { id: h.id, name: h.name, address: h.address, status: h.status, ...details }
+      })
+    )
+    res.json(households)
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── GET /households/:householdId ────────────────────────────────────────────
 router.get('/:householdId', async (req, res, next) => {
   try {

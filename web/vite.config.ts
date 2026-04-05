@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': 'http://localhost:3001',
-      '/ws': { target: 'ws://localhost:3001', ws: true },
+      '/api': process.env.VITE_API_URL ?? 'http://localhost:3001',
+      '/ws': { target: process.env.VITE_WS_URL ?? 'ws://localhost:3001', ws: true },
     },
   },
 })

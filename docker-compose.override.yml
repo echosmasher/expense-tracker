@@ -17,14 +17,17 @@ services:
     environment:
       NODE_ENV: development
     volumes:
-      - ./backend/src:/app/src:ro   # Hot-reload via nodemon watching src/
+      - ./backend/src:/app/backend/src:ro   # Hot-reload via tsx watch; also exposes new migration files
     ports:
       - "3001:3001"   # Direct API access (bypasses web proxy)
 
   web:
     build:
       target: development
+    environment:
+      VITE_API_URL: http://api:3001
+      VITE_WS_URL: ws://api:3001
     ports:
       - "3000:3000"   # Vite dev server
     volumes:
-      - ./web/src:/app/src:ro
+      - ./web/src:/app/web/src:ro

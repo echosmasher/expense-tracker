@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 
+// Layout
+import { AppShell } from './components/AppShell'
+
 // Auth
 import { Register } from './pages/Auth/Register'
 import { Login } from './pages/Auth/Login'
@@ -29,6 +32,7 @@ import { CategoryTrends } from './pages/Statistics/CategoryTrends'
 
 // Settings
 import { MembersAndCards } from './pages/Settings/MembersAndCards'
+import { ProfileSettings } from './pages/Settings/ProfileSettings'
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
@@ -53,26 +57,27 @@ export function App() {
         <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />
         <Route path="/accept-invite" element={<AcceptInvite />} />
 
-        {/* Onboarding */}
-        <Route path="/create-household" element={<RequireAuth><CreateHousehold /></RequireAuth>} />
+        {/* Main app with sidebar navigation */}
+        <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route path="/home" element={<ExpenseList />} />
+          <Route path="/expenses" element={<ExpenseList />} />
+          <Route path="/expenses/new" element={<AddExpense />} />
+          <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
 
-        {/* Main app */}
-        <Route path="/home" element={<RequireAuth><ExpenseList /></RequireAuth>} />
-        <Route path="/expenses" element={<RequireAuth><ExpenseList /></RequireAuth>} />
-        <Route path="/expenses/new" element={<RequireAuth><AddExpense /></RequireAuth>} />
-        <Route path="/expenses/:expenseId" element={<RequireAuth><ExpenseDetail /></RequireAuth>} />
+          <Route path="/settlement" element={<CurrentMonth />} />
+          <Route path="/settlement/history" element={<History />} />
 
-        <Route path="/settlement" element={<RequireAuth><CurrentMonth /></RequireAuth>} />
-        <Route path="/settlement/history" element={<RequireAuth><History /></RequireAuth>} />
+          <Route path="/projects" element={<ProjectList />} />
+          <Route path="/projects/new" element={<CreateProject />} />
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
 
-        <Route path="/projects" element={<RequireAuth><ProjectList /></RequireAuth>} />
-        <Route path="/projects/new" element={<RequireAuth><CreateProject /></RequireAuth>} />
-        <Route path="/projects/:projectId" element={<RequireAuth><ProjectDetail /></RequireAuth>} />
+          <Route path="/statistics" element={<MonthlyOverview />} />
+          <Route path="/statistics/trends" element={<CategoryTrends />} />
 
-        <Route path="/statistics" element={<RequireAuth><MonthlyOverview /></RequireAuth>} />
-        <Route path="/statistics/trends" element={<RequireAuth><CategoryTrends /></RequireAuth>} />
-
-        <Route path="/settings/members" element={<RequireAuth><MembersAndCards /></RequireAuth>} />
+          <Route path="/settings/members" element={<MembersAndCards />} />
+          <Route path="/settings/profile" element={<ProfileSettings />} />
+          <Route path="/create-household" element={<CreateHousehold />} />
+        </Route>
 
         {/* Default */}
         <Route path="/" element={<Navigate to="/home" replace />} />

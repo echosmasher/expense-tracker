@@ -106,9 +106,9 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
 
       <style>{`
         .add-expense-page {
-          max-width: 480px;
+          max-width: 720px;
           margin: 0 auto;
-          padding: 1.5rem 1rem 4rem;
+          padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
           color: #f4f4f5;
         }
@@ -330,9 +330,9 @@ function ReviewStep({
 
       <style>{`
         .add-expense-page {
-          max-width: 480px;
+          max-width: 720px;
           margin: 0 auto;
-          padding: 1.5rem 1rem 4rem;
+          padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
           color: #f4f4f5;
           display: flex;

@@ -1,3 +1,76 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Theme tokens ────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  --bg-base: #09090b;
+  --bg-card: #18181b;
+  --bg-card-hover: #1f1f22;
+  --bg-input: #09090b;
+  --bg-sidebar: #111113;
+  --border: #27272a;
+  --border-subtle: #1f1f22;
+  --border-input: #3f3f46;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-faint: #52525b;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-light: #818cf8;
+  --accent-bg: rgba(99,102,241,0.1);
+  --accent-border: rgba(99,102,241,0.25);
+  --success: #4ade80;
+  --success-bg: rgba(34,197,94,0.1);
+  --success-border: rgba(34,197,94,0.2);
+  --warning: #fbbf24;
+  --warning-bg: rgba(234,179,8,0.12);
+  --warning-border: rgba(234,179,8,0.2);
+  --danger: #f87171;
+  --danger-bg: rgba(248,113,113,0.1);
+  --danger-border: rgba(248,113,113,0.25);
+  --badge-bg: #27272a;
+  --badge-border: #3f3f46;
+  --badge-text: #71717a;
+}
+
+[data-theme="light"] {
+  --bg-base: #f8f8fa;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f4f5;
+  --bg-input: #ffffff;
+  --bg-sidebar: #f0f0f3;
+  --border: #e4e4e7;
+  --border-subtle: #f0f0f2;
+  --border-input: #d4d4d8;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --text-faint: #a1a1aa;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-light: #818cf8;
+  --accent-bg: rgba(99,102,241,0.08);
+  --accent-border: rgba(99,102,241,0.2);
+  --success: #16a34a;
+  --success-bg: rgba(34,197,94,0.08);
+  --success-border: rgba(34,197,94,0.15);
+  --warning: #d97706;
+  --warning-bg: rgba(234,179,8,0.08);
+  --warning-border: rgba(234,179,8,0.15);
+  --danger: #dc2626;
+  --danger-bg: rgba(248,113,113,0.06);
+  --danger-border: rgba(248,113,113,0.2);
+  --badge-bg: #f4f4f5;
+  --badge-border: #e4e4e7;
+  --badge-text: #71717a;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}

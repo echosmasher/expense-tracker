@@ -5,9 +5,9 @@
  * SC-001: 15-second timeout enforced via Promise.race.
  * On timeout or API failure, returns empty items array (never throws to caller).
  */
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 export interface ParsedReceiptItem {
   description: string
@@ -56,20 +56,19 @@ const TIMEOUT_MS = 15_000
 export async function parseReceipt(imageBuffer: Buffer, mimeType: string): Promise<ParsedReceipt> {
   const base64 = imageBuffer.toString('base64')
 
-  const mediaType = mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
-
-  const parsePromise = client.messages
+  const parsePromise = client.chat.completions
     .create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'gpt-4o-mini',
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      response_format: { type: 'json_object' },
       messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: [
             {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64 },
+              type: 'image_url',
+              image_url: { url: `data:${mimeType};base64,${base64}` },
             },
             { type: 'text', text: USER_PROMPT },
           ],
@@ -77,7 +76,7 @@ export async function parseReceipt(imageBuffer: Buffer, mimeType: string): Promi
       ],
     })
     .then((response) => {
-      const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
+      const text = response.choices[0]?.message?.content ?? ''
       const parsed = JSON.parse(text) as ParsedReceipt
       // Ensure integers
       parsed.items = (parsed.items ?? []).map((item) => ({

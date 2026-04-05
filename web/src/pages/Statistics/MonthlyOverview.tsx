@@ -186,7 +186,7 @@ export function MonthlyOverview() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
-        .stats-page { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem 5rem; font-family: 'Geist', sans-serif; color: #f4f4f5; background: #09090b; min-height: 100dvh; }
+        .stats-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
         .stats-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
         .stats-title { font-size: 1.375rem; font-weight: 600; margin: 0; letter-spacing: -0.025em; }
         .trends-link { background: none; border: none; color: #818cf8; font-size: 0.875rem; cursor: pointer; padding: 0; font-family: inherit; }

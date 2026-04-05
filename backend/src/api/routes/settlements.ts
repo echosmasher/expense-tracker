@@ -142,21 +142,25 @@ router.post('/', async (req, res, next) => {
       [householdId, periodYear, periodMonth]
     )
 
-    // Fetch allocation key shares
-    const sharesResult = await db.query<{ user_id: string; share_bp: number }>(
-      'SELECT user_id, share_bp FROM allocation_key_shares WHERE allocation_key_id = $1',
-      [household.current_allocation_key_id]
+    // Fetch allocation key shares with admin flag from household_members
+    const sharesResult = await db.query<{ user_id: string; share_bp: number; role: string }>(
+      `SELECT aks.user_id, aks.share_bp, hm.role
+       FROM allocation_key_shares aks
+       JOIN household_members hm
+         ON hm.user_id = aks.user_id AND hm.household_id = $2
+       WHERE aks.allocation_key_id = $1`,
+      [household.current_allocation_key_id, householdId]
     )
 
     // Calculate settlement
     const calcExpenses = expensesResult.rows.map((e) => ({
-      id: e.id,
-      paidByUserId: e.purchased_by,
-      amountOre: e.total_amount_ore,
+      purchasedByUserId: e.purchased_by,
+      householdAmountOre: Number(e.total_amount_ore),
     }))
     const calcShares = sharesResult.rows.map((s) => ({
       userId: s.user_id,
       shareBp: s.share_bp,
+      isAdmin: s.role === 'admin',
     }))
     const { balances, transactions } = calculateSettlement(calcExpenses, calcShares)
 
@@ -164,10 +168,10 @@ router.post('/', async (req, res, next) => {
     const settlement = await db.transaction(async (client) => {
       const sResult = await client.query<{ id: string }>(
         `INSERT INTO settlements
-           (household_id, period_year, period_month, status, allocation_key_snapshot_id)
-         VALUES ($1, $2, $3, 'open', $4)
+           (household_id, period_year, period_month, status, allocation_key_snapshot_id, triggered_by_user_id)
+         VALUES ($1, $2, $3, 'open', $4, $5)
          RETURNING id`,
-        [householdId, periodYear, periodMonth, household.current_allocation_key_id]
+        [householdId, periodYear, periodMonth, household.current_allocation_key_id, userId]
       )
       const settlementId = sResult.rows[0]!.id
 

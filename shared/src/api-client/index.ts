@@ -117,10 +117,19 @@ export const auth = {
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
+export interface UserPreferences {
+  theme: 'light' | 'dark'
+  notifyNewExpense: boolean
+  notifySettlement: boolean
+  notifyInvite: boolean
+}
+
 export interface UserProfile {
   id: string
   email: string
   name: string
+  avatarUrl: string | null
+  preferences: UserPreferences
   cards: Array<{ id: string; lastFour: string; label: string }>
 }
 
@@ -128,6 +137,17 @@ export const users = {
   me: () => request<UserProfile>('/users/me'),
   updateMe: (body: { name?: string }) =>
     request<UserProfile>('/users/me', { method: 'PATCH', body: JSON.stringify(body) }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<{ message: string }>('/users/me/password', { method: 'POST', body: JSON.stringify(body) }),
+  uploadAvatar: (file: File) => {
+    const form = new FormData()
+    form.append('avatar', file)
+    return request<{ avatarUrl: string }>('/users/me/avatar', { method: 'POST', body: form })
+  },
+  updatePreferences: (body: Partial<UserPreferences>) =>
+    request<UserPreferences>('/users/me/preferences', { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteAccount: (body: { password: string }) =>
+    request<void>('/users/me', { method: 'DELETE', body: JSON.stringify(body) }),
   addCard: (body: { lastFour: string; label: string }) =>
     request<{ id: string; lastFour: string; label: string }>('/users/me/cards', {
       method: 'POST',
@@ -153,6 +173,9 @@ export interface Household {
 export const households = {
   create: (body: { name: string; address?: string; allocationKey: Array<{ userId: string; shareBp: number }> }) =>
     request<Household>('/households', { method: 'POST', body: JSON.stringify(body) }),
+
+  listMine: () =>
+    request<Household[]>('/households'),
 
   get: (householdId: string) =>
     request<Household>(`/households/${householdId}`),

@@ -162,13 +162,11 @@ export function ExpenseDetail() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
 
         .detail-page {
-          max-width: 480px;
+          max-width: 720px;
           margin: 0 auto;
-          padding: 1.25rem 1rem 5rem;
+          padding: 1.25rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
           color: #f4f4f5;
-          min-height: 100dvh;
-          background: #09090b;
         }
         .detail-topbar { margin-bottom: 1.25rem; }
         .back-btn {
