@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: '/projects', label: 'Projects', icon: '📁' },
   { to: '/statistics', label: 'Statistics', icon: '📊' },
   { to: '/settings/members', label: 'Household', icon: '👥' },
+  { to: '/settings/categories', label: 'Categories', icon: '🏷' },
   { to: '/create-household', label: 'Register Household', icon: '🏠' },
 ]
 

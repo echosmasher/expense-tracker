@@ -33,6 +33,7 @@ import { CategoryTrends } from './pages/Statistics/CategoryTrends'
 // Settings
 import { MembersAndCards } from './pages/Settings/MembersAndCards'
 import { ProfileSettings } from './pages/Settings/ProfileSettings'
+import { CategorySettings } from './pages/Settings/CategorySettings'
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ export function App() {
           <Route path="/statistics/trends" element={<CategoryTrends />} />
 
           <Route path="/settings/members" element={<MembersAndCards />} />
+          <Route path="/settings/categories" element={<CategorySettings />} />
           <Route path="/settings/profile" element={<ProfileSettings />} />
           <Route path="/create-household" element={<CreateHousehold />} />
         </Route>

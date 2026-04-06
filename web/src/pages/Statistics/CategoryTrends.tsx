@@ -35,6 +35,7 @@ export function CategoryTrends() {
   const [loading, setLoading] = useState(!stats)
   const [error, setError] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [view, setView] = useState<'tag' | 'category'>('category')
 
   useEffect(() => {
     if (!household) return
@@ -44,20 +45,29 @@ export function CategoryTrends() {
       .catch((err) => { setError(err?.message ?? 'Failed to load stats.'); setLoading(false) })
   }, [household?.id])
 
-  // Build chart data from trends: array of { month, tag1: ore, tag2: ore, ... }
-  const trends = stats?.trends ?? []
-  const allTags = Array.from(new Set(trends.flatMap((t) => t.byTag.map((b) => b.tagName ?? 'Uncategorised'))))
+  // Build chart data from trends
+  const tagTrends = stats?.trends ?? []
+  const catTrends = stats?.categoryTrends ?? []
 
-  // Filter to selected tag or show all
-  const activeTags = selectedTag ? [selectedTag] : allTags
+  const allTags = Array.from(new Set(tagTrends.flatMap((t) => t.byTag.map((b) => b.tagName ?? 'Uncategorised'))))
+  const allCats = Array.from(new Set(catTrends.flatMap((t) => t.byCategory.map((b) => b.categoryName ?? 'Uncategorized'))))
+
+  const trends = view === 'tag' ? tagTrends : catTrends
+  const allLabels = view === 'tag' ? allTags : allCats
+  const activeLabels = selectedTag ? [selectedTag] : allLabels
 
   const chartData = trends.map((t) => {
+    const entries = view === 'tag' ? t.byTag : (t as any).byCategory
     const row: Record<string, string | number> = {
       month: t.month.slice(0, 7),
     }
-    for (const tag of activeTags) {
-      const entry = t.byTag.find((b) => (b.tagName ?? 'Uncategorised') === tag)
-      row[tag] = entry?.totalOre ?? 0
+    for (const label of activeLabels) {
+      const entry = entries?.find((b: any) =>
+        view === 'tag'
+          ? (b.tagName ?? 'Uncategorised') === label
+          : (b.categoryName ?? 'Uncategorized') === label
+      )
+      row[label] = entry?.totalOre ?? 0
     }
     return row
   })
@@ -74,8 +84,24 @@ export function CategoryTrends() {
 
       {!loading && !error && stats && (
         <>
-          {/* Tag filter */}
-          {allTags.length > 1 && (
+          {/* View toggle: tag vs category */}
+          <div className="tag-filter">
+            <button
+              className={`tag-chip ${view === 'category' ? 'tag-chip--active' : ''}`}
+              onClick={() => { setView('category'); setSelectedTag(null) }}
+            >
+              By category
+            </button>
+            <button
+              className={`tag-chip ${view === 'tag' ? 'tag-chip--active' : ''}`}
+              onClick={() => { setView('tag'); setSelectedTag(null) }}
+            >
+              By tag
+            </button>
+          </div>
+
+          {/* Label filter */}
+          {allLabels.length > 1 && (
             <div className="tag-filter">
               <button
                 className={`tag-chip ${!selectedTag ? 'tag-chip--active' : ''}`}
@@ -83,13 +109,13 @@ export function CategoryTrends() {
               >
                 All
               </button>
-              {allTags.map((tag) => (
+              {allLabels.map((label) => (
                 <button
-                  key={tag}
-                  className={`tag-chip ${selectedTag === tag ? 'tag-chip--active' : ''}`}
-                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                  key={label}
+                  className={`tag-chip ${selectedTag === label ? 'tag-chip--active' : ''}`}
+                  onClick={() => setSelectedTag(selectedTag === label ? null : label)}
                 >
-                  {tag}
+                  {label}
                 </button>
               ))}
             </div>
@@ -119,11 +145,11 @@ export function CategoryTrends() {
                     iconType="circle" iconSize={7}
                     formatter={(value) => <span style={{ color: '#a1a1aa', fontSize: '0.78rem' }}>{value}</span>}
                   />
-                  {activeTags.map((tag, idx) => (
+                  {activeLabels.map((label, idx) => (
                     <Line
-                      key={tag}
+                      key={label}
                       type="monotone"
-                      dataKey={tag}
+                      dataKey={label}
                       stroke={COLOURS[idx % COLOURS.length]}
                       strokeWidth={2}
                       dot={{ fill: COLOURS[idx % COLOURS.length], r: 3 }}
@@ -140,23 +166,32 @@ export function CategoryTrends() {
             <section className="trends-table-section">
               <h2 className="trends-section-title">Monthly totals</h2>
               <div className="trends-table">
-                {[...trends].reverse().map((t) => (
-                  <div key={t.month} className="trends-table-row">
-                    <span className="tt-month">
-                      {new Date(t.month + '-01').toLocaleDateString('nb-NO', { month: 'short', year: 'numeric' })}
-                    </span>
-                    <div className="tt-tags">
-                      {t.byTag
-                        .filter((b) => !selectedTag || (b.tagName ?? 'Uncategorised') === selectedTag)
-                        .map((b, i) => (
-                          <span key={i} className="tt-tag-row">
-                            <span className="tt-tag-name">{b.tagName ?? 'Uncategorised'}</span>
-                            <span className="tt-tag-amount">{formatNok(b.totalOre)}</span>
-                          </span>
-                        ))}
+                {[...trends].reverse().map((t) => {
+                  const entries = view === 'tag' ? t.byTag : (t as any).byCategory
+                  return (
+                    <div key={t.month} className="trends-table-row">
+                      <span className="tt-month">
+                        {new Date(t.month + '-01').toLocaleDateString('nb-NO', { month: 'short', year: 'numeric' })}
+                      </span>
+                      <div className="tt-tags">
+                        {(entries ?? [])
+                          .filter((b: any) => {
+                            if (!selectedTag) return true
+                            const name = view === 'tag' ? (b.tagName ?? 'Uncategorised') : (b.categoryName ?? 'Uncategorized')
+                            return name === selectedTag
+                          })
+                          .map((b: any, i: number) => (
+                            <span key={i} className="tt-tag-row">
+                              <span className="tt-tag-name">
+                                {view === 'tag' ? (b.tagName ?? 'Uncategorised') : (b.categoryName ?? 'Uncategorized')}
+                              </span>
+                              <span className="tt-tag-amount">{formatNok(b.totalOre)}</span>
+                            </span>
+                          ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </section>
           )}

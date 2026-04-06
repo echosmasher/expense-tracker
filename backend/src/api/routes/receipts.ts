@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
 import { parseReceipt } from '../../services/receiptParser.js'
+import { categorizeLineItems } from '../../services/categoryService.js'
 import { db } from '../../db/client.js'
 
 const router = Router()
@@ -69,6 +70,12 @@ router.post('/parse', upload.single('receipt'), async (req, res, next) => {
       }
     }
 
+    // Categorize items (two-tier: saved mappings first, then AI)
+    const categorized = await categorizeLineItems(
+      householdId,
+      parsed.items.map((item) => ({ description: item.description }))
+    )
+
     // Generate signed URL for the uploaded receipt
     const receiptImageUrl = await getReceiptUrl(key)
 
@@ -78,7 +85,11 @@ router.post('/parse', upload.single('receipt'), async (req, res, next) => {
       store: parsed.store,
       date: parsed.date,
       detectedCardLastFour: matchedCardLastFour,
-      items: parsed.items,
+      items: parsed.items.map((item, i) => ({
+        ...item,
+        categoryId: categorized[i]?.categoryId ?? null,
+        categoryName: categorized[i]?.categoryName ?? 'Uncategorized',
+      })),
     })
   } catch (err) {
     next(err)

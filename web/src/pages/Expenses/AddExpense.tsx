@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { receipts, expenses } from '@expense-tracker/shared'
-import type { ParsedReceipt } from '@expense-tracker/shared'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { receipts, expenses, projects, categories } from '@expense-tracker/shared'
+import type { ParsedReceipt, CategoryInfo } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
@@ -22,6 +22,8 @@ interface EditableItem {
   unitPriceOre: number
   isPersonal: boolean
   confidenceLow: boolean
+  categoryId?: string | null
+  categoryName?: string
 }
 
 // ─── Step 1: Upload ────────────────────────────────────────────────────────────
@@ -48,6 +50,8 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
         unitPriceOre: item.unitPriceOre,
         isPersonal: false,
         confidenceLow: item.confidenceLow,
+        categoryId: item.categoryId ?? null,
+        categoryName: item.categoryName ?? 'Uncategorized',
       }))
       onParsed(parsed, items)
     } catch (err: any) {
@@ -154,6 +158,86 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
 
 // ─── Step 2: Review ────────────────────────────────────────────────────────────
 
+// ─── Category Selector ────────────────────────────────────────────────────────
+
+function CategoryBadge({
+  categoryName,
+  householdId,
+  onSelect,
+}: {
+  categoryName: string
+  householdId: string
+  onSelect: (name: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [cats, setCats] = useState<CategoryInfo[]>([])
+  const [newCat, setNewCat] = useState('')
+  const [showNew, setShowNew] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      categories.list(householdId).then((res) => setCats(res.categories)).catch(() => {})
+    }
+  }, [open, householdId])
+
+  const isUncat = categoryName === 'Uncategorized'
+
+  function handleSelect(name: string) {
+    onSelect(name)
+    setOpen(false)
+    setShowNew(false)
+    setNewCat('')
+  }
+
+  function handleCreateNew() {
+    const trimmed = newCat.trim()
+    if (trimmed) handleSelect(trimmed)
+  }
+
+  return (
+    <div className="cat-badge-wrapper">
+      <button
+        className={`cat-badge ${isUncat ? 'cat-badge--uncat' : ''}`}
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        {categoryName}
+      </button>
+      {open && (
+        <div className="cat-dropdown">
+          {cats
+            .filter((c) => c.name !== categoryName)
+            .map((c) => (
+              <button key={c.id} className="cat-option" onClick={() => handleSelect(c.name)} type="button">
+                {c.name}
+              </button>
+            ))}
+          {!showNew ? (
+            <button className="cat-option cat-option--new" onClick={() => setShowNew(true)} type="button">
+              + New category…
+            </button>
+          ) : (
+            <div className="cat-new-row">
+              <input
+                className="cat-new-input"
+                type="text"
+                placeholder="Category name"
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateNew() }}
+                autoFocus
+              />
+              <button className="cat-new-btn" onClick={handleCreateNew} type="button">Add</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Step 2: Review ────────────────────────────────────────────────────────────
+
 function ReviewStep({
   parsed,
   items,
@@ -166,6 +250,8 @@ function ReviewStep({
   onBack: () => void
 }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('projectId')
   const userId = useAuthStore((s) => s.userId)!
   const household = useHouseholdStore((s) => s.household)!
   const addOrUpdateExpense = useExpenseStore((s) => s.addOrUpdateExpense)
@@ -188,7 +274,7 @@ function ReviewStep({
   }
 
   function addItem() {
-    onItemsChange([...items, { description: '', quantity: 1, unitPriceOre: 0, isPersonal: false, confidenceLow: false }])
+    onItemsChange([...items, { description: '', quantity: 1, unitPriceOre: 0, isPersonal: false, confidenceLow: false, categoryId: null, categoryName: 'Uncategorized' }])
   }
 
   async function handleConfirm() {
@@ -203,7 +289,7 @@ function ReviewStep({
     setSaving(true)
     setError(null)
     try {
-      const expense = await expenses.create(household.id, {
+      const payload = {
         receiptImageKey: parsed.receiptImageKey,
         store: store.trim() || undefined,
         date: date || undefined,
@@ -214,13 +300,21 @@ function ReviewStep({
           quantity: item.quantity,
           unitPriceOre: item.unitPriceOre,
           isPersonal: item.isPersonal,
+          categoryId: item.categoryId ?? undefined,
         })),
-      })
+      }
 
-      // Auto-confirm after review (user has already reviewed the items)
-      const confirmed = await expenses.confirm(household.id, expense.id)
-      addOrUpdateExpense(confirmed)
-      navigate(`/expenses/${confirmed.id}`)
+      if (projectId) {
+        // Project expenses are auto-confirmed on create — no review/confirm step.
+        await projects.createExpense(projectId, payload)
+        navigate(`/projects/${projectId}`)
+      } else {
+        const expense = await expenses.create(household.id, payload)
+        // Auto-confirm after review (user has already reviewed the items)
+        const confirmed = await expenses.confirm(household.id, expense.id)
+        addOrUpdateExpense(confirmed)
+        navigate(`/expenses/${confirmed.id}`)
+      }
     } catch (err: any) {
       setError(err?.message ?? 'Failed to save expense.')
     } finally {
@@ -302,6 +396,11 @@ function ReviewStep({
               </div>
             </div>
             <div className="item-actions">
+              <CategoryBadge
+                categoryName={item.categoryName ?? 'Uncategorized'}
+                householdId={household.id}
+                onSelect={(name) => updateItem(i, { categoryName: name })}
+              />
               <label className="item-personal-label">
                 <input
                   type="checkbox"
@@ -493,6 +592,84 @@ function ReviewStep({
           transition: background 0.15s, border-color 0.15s;
         }
         .add-item-btn:hover { background: rgba(99,102,241,0.06); border-color: #6366f1; }
+
+        .cat-badge-wrapper { position: relative; }
+        .cat-badge {
+          display: inline-block;
+          padding: 0.15rem 0.5rem;
+          border-radius: 9999px;
+          font-size: 0.7rem;
+          font-weight: 500;
+          font-family: inherit;
+          border: 1px solid #3f3f46;
+          background: #27272a;
+          color: #a1a1aa;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: border-color 0.15s;
+        }
+        .cat-badge:hover { border-color: #6366f1; }
+        .cat-badge--uncat {
+          border-color: #92400e;
+          background: rgba(146,64,14,0.15);
+          color: #fbbf24;
+        }
+        .cat-dropdown {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          z-index: 50;
+          min-width: 180px;
+          max-height: 220px;
+          overflow-y: auto;
+          background: #18181b;
+          border: 1px solid #3f3f46;
+          border-radius: 10px;
+          padding: 0.25rem;
+          display: flex;
+          flex-direction: column;
+        }
+        .cat-option {
+          background: none;
+          border: none;
+          color: #d4d4d8;
+          font-size: 0.8rem;
+          font-family: inherit;
+          padding: 0.4rem 0.6rem;
+          text-align: left;
+          cursor: pointer;
+          border-radius: 6px;
+          transition: background 0.1s;
+        }
+        .cat-option:hover { background: #27272a; }
+        .cat-option--new { color: #818cf8; }
+        .cat-new-row {
+          display: flex;
+          gap: 0.35rem;
+          padding: 0.3rem 0.4rem;
+        }
+        .cat-new-input {
+          flex: 1;
+          background: #09090b;
+          border: 1px solid #3f3f46;
+          border-radius: 6px;
+          color: #f4f4f5;
+          font-size: 0.8rem;
+          font-family: inherit;
+          padding: 0.25rem 0.4rem;
+          outline: none;
+        }
+        .cat-new-input:focus { border-color: #6366f1; }
+        .cat-new-btn {
+          background: #6366f1;
+          border: none;
+          border-radius: 6px;
+          color: #fff;
+          font-size: 0.75rem;
+          font-family: inherit;
+          padding: 0.25rem 0.5rem;
+          cursor: pointer;
+        }
       `}</style>
     </div>
   )

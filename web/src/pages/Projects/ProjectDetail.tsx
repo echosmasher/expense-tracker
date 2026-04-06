@@ -110,7 +110,7 @@ export function ProjectDetail() {
             <div className="pd-section-header">
               <h2 className="pd-section-title">Expenses</h2>
               {project.status === 'active' && (
-                <button className="add-expense-btn" onClick={() => navigate('/expenses/new')}>
+                <button className="add-expense-btn" onClick={() => navigate(`/expenses/new?projectId=${project.id}`)}>
                   + Add
                 </button>
               )}

@@ -144,6 +144,12 @@ router.post('/', async (req, res, next) => {
         [householdId]
       )
 
+      // Seed "Uncategorized" system category
+      await client.query(
+        "INSERT INTO categories (household_id, name, is_system) VALUES ($1, 'Uncategorized', true)",
+        [householdId]
+      )
+
       return { id: householdId, keyId }
     })
 
