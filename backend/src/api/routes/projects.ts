@@ -205,25 +205,28 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       store: z.string().optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       purchasedBy: z.string().uuid(),
+      receiptImageKey: z.string().optional(),
+      cardLastFour: z.string().optional(),
       lineItems: z.array(LineItemSchema).min(1),
     }).parse(req.body)
 
     const totalAmountOre = body.lineItems.reduce((sum, li) => sum + li.unitPriceOre * li.quantity, 0)
 
-    // Get householdId from project
-    const pResult = await db.query<{ household_id: string }>(
-      'SELECT household_id FROM projects WHERE id = $1',
-      [projectId]
-    )
-    const householdId = pResult.rows[0]!.household_id
-
     const expenseId = await db.transaction(async (client) => {
       const expResult = await client.query<{ id: string }>(
         `INSERT INTO expenses
-           (household_id, project_id, purchased_by, store, expense_date, total_amount_ore, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
+           (project_id, purchased_by, store, expense_date, total_amount_ore, receipt_image_key, card_last_four, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed')
          RETURNING id`,
-        [householdId, projectId, body.purchasedBy, body.store ?? null, body.date ?? null, totalAmountOre]
+        [
+          projectId,
+          body.purchasedBy,
+          body.store ?? null,
+          body.date ?? null,
+          totalAmountOre,
+          body.receiptImageKey ?? null,
+          body.cardLastFour ?? null,
+        ]
       )
       const eid = expResult.rows[0]!.id
       for (const li of body.lineItems) {
@@ -286,23 +289,34 @@ projectDetailRouter.post('/finish', async (req, res, next) => {
       "SELECT id, total_amount_ore, purchased_by FROM expenses WHERE project_id = $1 AND status = 'confirmed'",
       [projectId]
     )
-    const sharesResult = await db.query<{ user_id: string; share_bp: number }>(
-      'SELECT user_id, share_bp FROM allocation_key_shares WHERE allocation_key_id = $1',
-      [project.current_allocation_key_id]
+    const sharesResult = await db.query<{ user_id: string; share_bp: number; role: string }>(
+      `SELECT aks.user_id, aks.share_bp, pm.role
+       FROM allocation_key_shares aks
+       JOIN project_members pm
+         ON pm.user_id = aks.user_id AND pm.project_id = $2
+       WHERE aks.allocation_key_id = $1`,
+      [project.current_allocation_key_id, projectId]
     )
 
     const { balances, transactions } = calculateSettlement(
-      expensesResult.rows.map((e) => ({ id: e.id, paidByUserId: e.purchased_by, amountOre: e.total_amount_ore })),
-      sharesResult.rows.map((s) => ({ userId: s.user_id, shareBp: s.share_bp }))
+      expensesResult.rows.map((e) => ({
+        purchasedByUserId: e.purchased_by,
+        householdAmountOre: Number(e.total_amount_ore),
+      })),
+      sharesResult.rows.map((s) => ({
+        userId: s.user_id,
+        shareBp: s.share_bp,
+        isAdmin: s.role === 'admin',
+      }))
     )
 
     const settlementId = await db.transaction(async (client) => {
       await client.query("UPDATE projects SET status = 'settling' WHERE id = $1", [projectId])
 
       const sResult = await client.query<{ id: string }>(
-        `INSERT INTO settlements (household_id, project_id, status, allocation_key_snapshot_id)
-         VALUES ($1, $2, 'open', $3) RETURNING id`,
-        [project.household_id, projectId, project.current_allocation_key_id]
+        `INSERT INTO settlements (project_id, status, allocation_key_snapshot_id, triggered_by_user_id)
+         VALUES ($1, 'open', $2, $3) RETURNING id`,
+        [projectId, project.current_allocation_key_id, userId]
       )
       const sid = sResult.rows[0]!.id
 

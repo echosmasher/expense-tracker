@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend
 } from 'recharts'
 import { statistics } from '@expense-tracker/shared'
-import type { Statistics } from '@expense-tracker/shared'
+import type { Statistics, CategoryDetail } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useStatsStore } from '../../stores/statsStore'
 
@@ -53,6 +53,9 @@ export function MonthlyOverview() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [drillCategory, setDrillCategory] = useState<{ id: string | null; name: string } | null>(null)
+  const [drillData, setDrillData] = useState<CategoryDetail | null>(null)
+  const [drillLoading, setDrillLoading] = useState(false)
 
   useEffect(() => {
     if (!household) return
@@ -68,8 +71,20 @@ export function MonthlyOverview() {
       })
   }, [household?.id, month, includePersonal])
 
+  useEffect(() => {
+    if (!drillCategory || !household) return
+    setDrillLoading(true)
+    setDrillData(null)
+    const catParam = drillCategory.id ?? 'uncategorized'
+    statistics.categoryDetail(household.id, catParam, { month, includePersonal })
+      .then(setDrillData)
+      .catch(() => setDrillData(null))
+      .finally(() => setDrillLoading(false))
+  }, [drillCategory, household?.id, month, includePersonal])
+
   const donutData = stats?.byTag.map((t) => ({ name: t.tagName, value: t.totalOre })) ?? []
   const memberData = stats?.byMember.map((m) => ({ name: m.name, value: m.totalOre })) ?? []
+  const categoryData = stats?.byCategory?.map((c) => ({ name: c.categoryName, value: c.totalOre })) ?? []
 
   return (
     <div className="stats-page">
@@ -103,7 +118,7 @@ export function MonthlyOverview() {
           {/* Donut: by tag */}
           {donutData.length > 0 && (
             <section className="stats-section">
-              <h2 className="stats-section-title">By category</h2>
+              <h2 className="stats-section-title">By tag</h2>
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
@@ -115,6 +130,41 @@ export function MonthlyOverview() {
                       dataKey="value"
                     >
                       {donutData.map((_, idx) => (
+                        <Cell key={idx} fill={COLOURS[idx % COLOURS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      iconType="circle"
+                      iconSize={8}
+                      formatter={(value) => <span style={{ color: '#a1a1aa', fontSize: '0.78rem' }}>{value}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {/* Donut: by product category */}
+          {categoryData.length > 0 && (
+            <section className="stats-section">
+              <h2 className="stats-section-title">By product category</h2>
+              <div className="chart-wrap">
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%" cy="50%"
+                      innerRadius={55} outerRadius={90}
+                      paddingAngle={2}
+                      dataKey="value"
+                      style={{ cursor: 'pointer' }}
+                      onClick={(_, idx) => {
+                        const cat = stats!.byCategory[idx]
+                        if (cat) setDrillCategory({ id: cat.categoryId, name: cat.categoryName })
+                      }}
+                    >
+                      {categoryData.map((_, idx) => (
                         <Cell key={idx} fill={COLOURS[idx % COLOURS.length]} />
                       ))}
                     </Pie>
@@ -184,6 +234,58 @@ export function MonthlyOverview() {
         </>
       )}
 
+      {drillCategory && (
+        <div className="drill-backdrop" onClick={() => { setDrillCategory(null); setDrillData(null) }}>
+          <div className="drill-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drill-header">
+              <h2 className="drill-title">{drillCategory.name}</h2>
+              <button className="drill-close" onClick={() => { setDrillCategory(null); setDrillData(null) }}>×</button>
+            </div>
+            {drillLoading && <p className="drill-msg">Loading…</p>}
+            {!drillLoading && drillData && drillData.items.length === 0 && (
+              <p className="drill-msg">No items found.</p>
+            )}
+            {!drillLoading && drillData && drillData.items.length > 0 && (
+              <ul className="drill-list">
+                {(() => {
+                  const groups: Record<string, typeof drillData.items> = {}
+                  for (const item of drillData.items) {
+                    if (!groups[item.expenseId]) groups[item.expenseId] = []
+                    groups[item.expenseId]!.push(item)
+                  }
+                  return Object.entries(groups).map(([expenseId, items]) => (
+                    <li key={expenseId} className="drill-group">
+                      <button
+                        className="drill-group-header"
+                        onClick={() => navigate(`/expenses/${expenseId}`)}
+                      >
+                        <span>{items[0]!.store ?? 'Unknown store'}</span>
+                        <span className="drill-group-date">
+                          {items[0]!.expenseDate
+                            ? new Date(items[0]!.expenseDate).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+                            : '—'}
+                        </span>
+                      </button>
+                      <ul className="drill-items">
+                        {items.map((item) => (
+                          <li key={item.lineItemId} className="drill-item">
+                            <span className="drill-item-desc">{item.description}</span>
+                            <span className="drill-item-price">
+                              {item.quantity > 1 && `${item.quantity} × `}
+                              {formatNok(item.unitPriceOre * item.quantity)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))
+                })()}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
         .stats-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
@@ -223,6 +325,23 @@ export function MonthlyOverview() {
         .top-item-count { font-size: 0.72rem; color: #71717a; }
         .export-btn { display: flex; justify-content: center; align-items: center; background: #18181b; border: 1px solid #27272a; border-radius: 10px; color: #818cf8; font-size: 0.875rem; font-weight: 500; padding: 0.65rem; text-decoration: none; transition: background 0.15s; }
         .export-btn:hover { background: #1f1f22; }
+        .drill-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
+        .drill-modal { background: #18181b; border: 1px solid #27272a; border-radius: 16px 16px 0 0; width: 100%; max-width: 720px; max-height: 75vh; display: flex; flex-direction: column; overflow: hidden; }
+        .drill-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid #27272a; flex-shrink: 0; }
+        .drill-title { font-size: 1rem; font-weight: 600; margin: 0; color: #f4f4f5; }
+        .drill-close { background: none; border: none; color: #71717a; font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; font-family: inherit; }
+        .drill-close:hover { color: #f4f4f5; }
+        .drill-msg { color: #71717a; font-size: 0.85rem; text-align: center; padding: 2rem 0; margin: 0; }
+        .drill-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+        .drill-group { border-bottom: 1px solid #27272a; }
+        .drill-group:last-child { border-bottom: none; }
+        .drill-group-header { display: flex; align-items: center; justify-content: space-between; width: 100%; background: #1f1f22; border: none; color: #a1a1aa; font-size: 0.78rem; font-weight: 500; padding: 0.5rem 1.25rem; cursor: pointer; font-family: inherit; transition: background 0.1s; }
+        .drill-group-header:hover { background: #27272a; color: #818cf8; }
+        .drill-group-date { color: #52525b; }
+        .drill-items { list-style: none; margin: 0; padding: 0; }
+        .drill-item { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1.25rem 0.5rem 1.75rem; gap: 0.75rem; }
+        .drill-item-desc { font-size: 0.85rem; color: #d4d4d8; flex: 1; }
+        .drill-item-price { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: #a1a1aa; flex-shrink: 0; }
       `}</style>
     </div>
   )

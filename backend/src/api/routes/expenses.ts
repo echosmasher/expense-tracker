@@ -32,6 +32,7 @@ const LineItemSchema = z.object({
   unitPriceOre: z.number().int('Unit price must be an integer (øre)'),
   tagId: z.string().uuid().optional(),
   isPersonal: z.boolean().default(false),
+  categoryId: z.string().uuid().optional(),
 })
 
 const CreateExpenseSchema = z.object({
@@ -106,8 +107,8 @@ router.post('/', async (req, res, next) => {
 
         await client.query(
           `INSERT INTO line_items
-             (expense_id, description, quantity, unit_price_ore, tag_id, is_personal)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+             (expense_id, description, quantity, unit_price_ore, tag_id, is_personal, category_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             expenseId,
             item.description,
@@ -115,6 +116,7 @@ router.post('/', async (req, res, next) => {
             item.unitPriceOre,
             item.tagId ?? null,
             isPersonal,
+            item.categoryId ?? null,
           ]
         )
       }
@@ -240,6 +242,95 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
   }
 })
 
+// ─── PATCH /households/:householdId/expenses/:expenseId/line-items/:lineItemId ─
+
+const UpdateLineItemSchema = z.object({
+  unitPriceOre: z.number().int().min(0).optional(),
+  quantity: z.number().int().min(1).optional(),
+  description: z.string().min(1).optional(),
+}).refine((d) => d.unitPriceOre !== undefined || d.quantity !== undefined || d.description !== undefined, {
+  message: 'At least one field must be provided',
+})
+
+const lineItemRouter = Router({ mergeParams: true })
+lineItemRouter.use(requireAuth)
+
+lineItemRouter.patch('/', async (req, res, next) => {
+  try {
+    const { householdId, expenseId, lineItemId } = req.params as {
+      householdId: string; expenseId: string; lineItemId: string
+    }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+
+    // Verify expense belongs to household
+    const expCheck = await db.query(
+      'SELECT id FROM expenses WHERE id = $1 AND household_id = $2',
+      [expenseId, householdId]
+    )
+    if (expCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Expense not found')
+
+    // Verify line item belongs to expense
+    const liCheck = await db.query(
+      'SELECT id FROM line_items WHERE id = $1 AND expense_id = $2',
+      [lineItemId, expenseId]
+    )
+    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+
+    const body = UpdateLineItemSchema.parse(req.body)
+
+    // Build dynamic UPDATE
+    const sets: string[] = []
+    const params: unknown[] = []
+    let i = 1
+    if (body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
+    if (body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
+    if (body.description !== undefined) { sets.push(`description = $${i++}`); params.push(body.description) }
+    params.push(lineItemId)
+
+    await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
+
+    // Recalculate expense total from non-personal line items
+    const totalResult = await db.query<{ total: string }>(
+      `SELECT COALESCE(SUM(unit_price_ore * quantity), 0)::bigint as total
+       FROM line_items WHERE expense_id = $1 AND is_personal = false`,
+      [expenseId]
+    )
+    await db.query(
+      'UPDATE expenses SET total_amount_ore = $1 WHERE id = $2',
+      [parseInt(totalResult.rows[0]!.total, 10), expenseId]
+    )
+
+    // Return updated line item
+    const updated = await db.query<{
+      id: string; description: string; quantity: number; unit_price_ore: number;
+      tag_id: string | null; is_personal: boolean; category_id: string | null; category_name: string | null
+    }>(
+      `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
+              li.category_id, c.name as category_name
+       FROM line_items li LEFT JOIN categories c ON c.id = li.category_id
+       WHERE li.id = $1`,
+      [lineItemId]
+    )
+    const li = updated.rows[0]!
+    res.json({
+      id: li.id,
+      description: li.description,
+      quantity: li.quantity,
+      unitPriceOre: li.unit_price_ore,
+      tagId: li.tag_id,
+      isPersonal: li.is_personal,
+      categoryId: li.category_id,
+      categoryName: li.category_name,
+      newTotalAmountOre: parseInt(totalResult.rows[0]!.total, 10),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+export { lineItemRouter }
+
 // ─── Helper: fetch full expense with line items and signed receipt URL ────────
 
 async function getFullExpense(expenseId: string, _userId: string) {
@@ -271,8 +362,14 @@ async function getFullExpense(expenseId: string, _userId: string) {
     unit_price_ore: number
     tag_id: string | null
     is_personal: boolean
+    category_id: string | null
+    category_name: string | null
   }>(
-    'SELECT id, description, quantity, unit_price_ore, tag_id, is_personal FROM line_items WHERE expense_id = $1 ORDER BY id',
+    `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
+            li.category_id, c.name as category_name
+     FROM line_items li
+     LEFT JOIN categories c ON c.id = li.category_id
+     WHERE li.expense_id = $1 ORDER BY li.id`,
     [expenseId]
   )
 
@@ -305,6 +402,8 @@ async function getFullExpense(expenseId: string, _userId: string) {
       unitPriceOre: li.unit_price_ore,
       tagId: li.tag_id,
       isPersonal: li.is_personal,
+      categoryId: li.category_id,
+      categoryName: li.category_name,
     })),
   }
 }

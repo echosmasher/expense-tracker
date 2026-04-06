@@ -106,7 +106,14 @@ export function CurrentMonth() {
       setCurrentSettlement(settlement)
     } catch (err: any) {
       if (err?.status === 409) {
-        setError('Settlement for this period already exists.')
+        const code = err?.code
+        if (code === 'OPEN_SETTLEMENT_EXISTS') {
+          setError('An open settlement already exists for this period. Complete it first.')
+        } else if (code === 'NO_EXPENSES') {
+          setError('No unsettled confirmed expenses for this period.')
+        } else {
+          setError('Settlement for this period already exists.')
+        }
       } else {
         setError(err?.message ?? 'Failed to trigger settlement.')
       }

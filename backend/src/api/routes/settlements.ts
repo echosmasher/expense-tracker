@@ -120,16 +120,16 @@ router.post('/', async (req, res, next) => {
     const periodYear = prevMonth.getFullYear()
     const periodMonth = prevMonth.getMonth() + 1 // 1-indexed
 
-    // Check not already settled for this period
-    const existing = await db.query(
-      'SELECT id FROM settlements WHERE household_id = $1 AND period_year = $2 AND period_month = $3',
+    // Block if there is already an open (in-progress) settlement for this period
+    const openExisting = await db.query(
+      `SELECT id FROM settlements WHERE household_id = $1 AND period_year = $2 AND period_month = $3 AND status = 'open'`,
       [householdId, periodYear, periodMonth]
     )
-    if (existing.rows.length > 0) {
-      throw new AppError(409, 'ALREADY_SETTLED', 'Settlement for this period already exists')
+    if (openExisting.rows.length > 0) {
+      throw new AppError(409, 'OPEN_SETTLEMENT_EXISTS', 'An open settlement already exists for this period. Complete it before creating another.')
     }
 
-    // Fetch all confirmed household expenses for the period
+    // Fetch all confirmed (unsettled) household expenses for the period
     const expensesResult = await db.query<{
       id: string; total_amount_ore: number; purchased_by: string
     }>(
@@ -141,6 +141,10 @@ router.post('/', async (req, res, next) => {
          AND EXTRACT(MONTH FROM e.expense_date) = $3`,
       [householdId, periodYear, periodMonth]
     )
+
+    if (expensesResult.rows.length === 0) {
+      throw new AppError(409, 'NO_EXPENSES', 'No unsettled confirmed expenses for this period')
+    }
 
     // Fetch allocation key shares with admin flag from household_members
     const sharesResult = await db.query<{ user_id: string; share_bp: number; role: string }>(

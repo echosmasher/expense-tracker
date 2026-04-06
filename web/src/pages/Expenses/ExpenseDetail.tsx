@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { expenses } from '@expense-tracker/shared'
-import type { Expense } from '@expense-tracker/shared'
+import { expenses, categories } from '@expense-tracker/shared'
+import type { Expense, CategoryInfo } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
 
@@ -14,6 +14,154 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+function EditablePrice({
+  lineItemId,
+  expenseId,
+  householdId,
+  unitPriceOre,
+  quantity,
+  onUpdated,
+}: {
+  lineItemId: string
+  expenseId: string
+  householdId: string
+  unitPriceOre: number
+  quantity: number
+  onUpdated: (lineItemId: string, unitPriceOre: number, newTotalAmountOre: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function startEdit() {
+    setValue((unitPriceOre / 100).toFixed(2).replace('.', ','))
+    setEditing(true)
+  }
+
+  async function save() {
+    const parsed = Math.round(parseFloat(value.replace(',', '.')) * 100)
+    if (isNaN(parsed) || parsed < 0) { setEditing(false); return }
+    if (parsed === unitPriceOre) { setEditing(false); return }
+    setSaving(true)
+    try {
+      const result = await expenses.updateLineItem(householdId, expenseId, lineItemId, { unitPriceOre: parsed })
+      onUpdated(lineItemId, result.unitPriceOre, result.newTotalAmountOre)
+      setEditing(false)
+    } catch { /* ignore */ }
+    finally { setSaving(false) }
+  }
+
+  if (editing) {
+    return (
+      <span className="editable-price-row">
+        <span className="editable-price-prefix">kr</span>
+        <input
+          className="editable-price-input"
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+          onBlur={save}
+          autoFocus
+          disabled={saving}
+        />
+        {quantity > 1 && <span className="editable-price-qty">× {quantity}</span>}
+      </span>
+    )
+  }
+
+  return (
+    <button type="button" className="line-item-price line-item-price--editable" onClick={startEdit}>
+      {formatNok(unitPriceOre * quantity)}
+    </button>
+  )
+}
+
+function DetailCategoryBadge({
+  lineItemId,
+  expenseId,
+  categoryName,
+  householdId,
+  onUpdated,
+}: {
+  lineItemId: string
+  expenseId: string
+  categoryName: string | null
+  householdId: string
+  onUpdated: (lineItemId: string, categoryId: string, categoryName: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [cats, setCats] = useState<CategoryInfo[]>([])
+  const [newCat, setNewCat] = useState('')
+  const [showNew, setShowNew] = useState(false)
+
+  const display = categoryName ?? 'Uncategorized'
+  const isUncat = display === 'Uncategorized'
+
+  useEffect(() => {
+    if (open) {
+      categories.list(householdId).then((res) => setCats(res.categories)).catch(() => {})
+    }
+  }, [open, householdId])
+
+  async function handleSelect(name: string) {
+    setOpen(false)
+    setShowNew(false)
+    setNewCat('')
+    try {
+      const result = await categories.updateLineItemCategory(householdId, expenseId, lineItemId, name)
+      onUpdated(lineItemId, result.categoryId, result.categoryName)
+    } catch { /* ignore */ }
+  }
+
+  function handleCreateNew() {
+    const trimmed = newCat.trim()
+    if (trimmed) handleSelect(trimmed)
+  }
+
+  return (
+    <span className="dcat-wrapper" style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        type="button"
+        className={`dcat-badge ${isUncat ? 'dcat-badge--uncat' : ''}`}
+        onClick={() => setOpen(!open)}
+      >
+        {display}
+      </button>
+      {open && (
+        <div className="dcat-dropdown">
+          {cats
+            .filter((c) => c.name !== display)
+            .map((c) => (
+              <button key={c.id} type="button" className="dcat-option" onClick={() => handleSelect(c.name)}>
+                {c.name}
+              </button>
+            ))}
+          {!showNew ? (
+            <button type="button" className="dcat-option dcat-option--new" onClick={() => setShowNew(true)}>
+              + New category…
+            </button>
+          ) : (
+            <span className="dcat-new-row">
+              <input
+                className="dcat-new-input"
+                type="text"
+                placeholder="Category name"
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateNew() }}
+                autoFocus
+              />
+              <button type="button" className="dcat-new-btn" onClick={handleCreateNew}>Add</button>
+            </span>
+          )}
+        </div>
+      )}
+    </span>
+  )
+}
+
 export function ExpenseDetail() {
   const { expenseId } = useParams<{ expenseId: string }>()
   const navigate = useNavigate()
@@ -21,15 +169,14 @@ export function ExpenseDetail() {
   const addOrUpdateExpense = useExpenseStore((s) => s.addOrUpdateExpense)
   const storedExpenses = useExpenseStore((s) => s.expenses)
 
-  const [expense, setExpense] = useState<Expense | null>(
-    storedExpenses.find((e) => e.id === expenseId) ?? null
-  )
-  const [loading, setLoading] = useState(!expense)
+  const [expense, setExpense] = useState<Expense | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
-    if (!household || !expenseId || expense) return
+    if (!household || !expenseId) return
+    setLoading(true)
     expenses.get(household.id, expenseId)
       .then((data) => {
         setExpense(data)
@@ -96,14 +243,49 @@ export function ExpenseDetail() {
                 <li key={item.id} className={`line-item ${item.isPersonal ? 'line-item--personal' : ''}`}>
                   <div className="line-item-left">
                     <span className="line-item-desc">{item.description}</span>
-                    {item.quantity !== 1 && (
-                      <span className="line-item-qty">× {item.quantity}</span>
-                    )}
+                    <span className="line-item-meta-row">
+                      {item.quantity !== 1 && (
+                        <span className="line-item-qty">× {item.quantity}</span>
+                      )}
+                      <DetailCategoryBadge
+                        lineItemId={item.id}
+                        expenseId={expense.id}
+                        categoryName={item.categoryName}
+                        householdId={expense.householdId}
+                        onUpdated={(liId, catId, catName) => {
+                          setExpense((prev) => {
+                            if (!prev) return prev
+                            return {
+                              ...prev,
+                              lineItems: prev.lineItems.map((li) =>
+                                li.id === liId ? { ...li, categoryId: catId, categoryName: catName } : li
+                              ),
+                            }
+                          })
+                        }}
+                      />
+                    </span>
                   </div>
                   <div className="line-item-right">
-                    <span className="line-item-price">
-                      {formatNok(item.unitPriceOre * item.quantity)}
-                    </span>
+                    <EditablePrice
+                      lineItemId={item.id}
+                      expenseId={expense.id}
+                      householdId={expense.householdId}
+                      unitPriceOre={item.unitPriceOre}
+                      quantity={item.quantity}
+                      onUpdated={(liId, newPrice, newTotal) => {
+                        setExpense((prev) => {
+                          if (!prev) return prev
+                          return {
+                            ...prev,
+                            totalAmountOre: newTotal,
+                            lineItems: prev.lineItems.map((li) =>
+                              li.id === liId ? { ...li, unitPriceOre: newPrice } : li
+                            ),
+                          }
+                        })
+                      }}
+                    />
                     {item.isPersonal && <span className="personal-tag">personal</span>}
                   </div>
                 </li>
@@ -234,7 +416,8 @@ export function ExpenseDetail() {
         }
         .line-item:last-child { border-bottom: none; }
         .line-item--personal { opacity: 0.7; }
-        .line-item-left { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+        .line-item-left { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+        .line-item-meta-row { display: flex; align-items: center; gap: 0.5rem; }
         .line-item-desc { font-size: 0.875rem; color: #e4e4e7; }
         .line-item-qty { font-size: 0.75rem; color: #71717a; }
         .line-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
@@ -317,6 +500,113 @@ export function ExpenseDetail() {
           background: #27272a;
           border-color: #3f3f46;
           color: #71717a;
+        }
+
+        .line-item-price--editable {
+          background: none;
+          border: none;
+          border-bottom: 1px dashed #3f3f46;
+          cursor: pointer;
+          padding: 0 0 1px;
+          transition: border-color 0.15s;
+        }
+        .line-item-price--editable:hover { border-color: #6366f1; }
+        .editable-price-row {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+        .editable-price-prefix {
+          font-size: 0.75rem;
+          color: #71717a;
+        }
+        .editable-price-input {
+          width: 72px;
+          background: #09090b;
+          border: 1px solid #6366f1;
+          border-radius: 6px;
+          color: #f4f4f5;
+          font-family: 'DM Mono', monospace;
+          font-size: 0.85rem;
+          padding: 0.15rem 0.35rem;
+          outline: none;
+          text-align: right;
+        }
+        .editable-price-qty {
+          font-size: 0.72rem;
+          color: #71717a;
+        }
+        .dcat-badge {
+          display: inline-block;
+          padding: 0.1rem 0.4rem;
+          border-radius: 9999px;
+          font-size: 0.68rem;
+          font-weight: 500;
+          font-family: inherit;
+          border: 1px solid #3f3f46;
+          background: #27272a;
+          color: #a1a1aa;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: border-color 0.15s;
+        }
+        .dcat-badge:hover { border-color: #6366f1; }
+        .dcat-badge--uncat {
+          border-color: #92400e;
+          background: rgba(146,64,14,0.15);
+          color: #fbbf24;
+        }
+        .dcat-dropdown {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          z-index: 50;
+          min-width: 170px;
+          max-height: 200px;
+          overflow-y: auto;
+          background: #18181b;
+          border: 1px solid #3f3f46;
+          border-radius: 10px;
+          padding: 0.25rem;
+          display: flex;
+          flex-direction: column;
+        }
+        .dcat-option {
+          background: none;
+          border: none;
+          color: #d4d4d8;
+          font-size: 0.78rem;
+          font-family: inherit;
+          padding: 0.35rem 0.5rem;
+          text-align: left;
+          cursor: pointer;
+          border-radius: 6px;
+          transition: background 0.1s;
+        }
+        .dcat-option:hover { background: #27272a; }
+        .dcat-option--new { color: #818cf8; }
+        .dcat-new-row { display: flex; gap: 0.3rem; padding: 0.25rem 0.35rem; }
+        .dcat-new-input {
+          flex: 1;
+          background: #09090b;
+          border: 1px solid #3f3f46;
+          border-radius: 6px;
+          color: #f4f4f5;
+          font-size: 0.78rem;
+          font-family: inherit;
+          padding: 0.2rem 0.35rem;
+          outline: none;
+        }
+        .dcat-new-input:focus { border-color: #6366f1; }
+        .dcat-new-btn {
+          background: #6366f1;
+          border: none;
+          border-radius: 6px;
+          color: #fff;
+          font-size: 0.72rem;
+          font-family: inherit;
+          padding: 0.2rem 0.4rem;
+          cursor: pointer;
         }
       `}</style>
     </div>

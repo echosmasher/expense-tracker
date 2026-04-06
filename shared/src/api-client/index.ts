@@ -203,6 +203,8 @@ export interface ParsedReceipt {
     quantity: number
     unitPriceOre: number
     confidenceLow: boolean
+    categoryId?: string | null
+    categoryName?: string
   }>
 }
 
@@ -239,6 +241,8 @@ export interface Expense {
     unitPriceOre: number
     tagId: string | null
     isPersonal: boolean
+    categoryId: string | null
+    categoryName: string | null
   }>
 }
 
@@ -259,6 +263,7 @@ export const expenses = {
       unitPriceOre: number
       tagId?: string
       isPersonal?: boolean
+      categoryId?: string
     }>
   }) =>
     request<Expense>(`/households/${householdId}/expenses`, { method: 'POST', body: JSON.stringify(body) }),
@@ -266,6 +271,13 @@ export const expenses = {
     request<Expense>(`/households/${householdId}/expenses/${expenseId}`),
   confirm: (householdId: string, expenseId: string) =>
     request<Expense>(`/households/${householdId}/expenses/${expenseId}/confirm`, { method: 'POST' }),
+  updateLineItem: (householdId: string, expenseId: string, lineItemId: string, body: {
+    unitPriceOre?: number; quantity?: number; description?: string
+  }) =>
+    request<Expense['lineItems'][0] & { newTotalAmountOre: number }>(
+      `/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}`,
+      { method: 'PATCH', body: JSON.stringify(body) }
+    ),
 }
 
 // ─── Settlements ─────────────────────────────────────────────────────────────
@@ -336,6 +348,40 @@ export interface Statistics {
   byMember: Array<{ userId: string; name: string; totalOre: number }>
   topItems: Array<{ description: string; totalOre: number; count: number }>
   trends: Array<{ month: string; byTag: Array<{ tagId: string; tagName: string; totalOre: number }> }>
+  byCategory: Array<{ categoryId: string | null; categoryName: string; totalOre: number; itemCount: number }>
+  categoryTrends: Array<{ month: string; byCategory: Array<{ categoryId: string | null; categoryName: string; totalOre: number }> }>
+}
+
+export interface CategoryDetailItem {
+  lineItemId: string
+  description: string
+  quantity: number
+  unitPriceOre: number
+  isPersonal: boolean
+  expenseId: string
+  store: string | null
+  expenseDate: string | null
+  purchaserName: string
+}
+
+export interface CategoryDetail {
+  categoryId: string | null
+  categoryName: string
+  items: CategoryDetailItem[]
+}
+
+export interface CategoryInfo {
+  id: string
+  name: string
+  isSystem: boolean
+  mappingCount: number
+}
+
+export interface CategoryUpdateResult {
+  lineItemId: string
+  categoryId: string
+  categoryName: string
+  mappingSaved: boolean
 }
 
 export const statistics = {
@@ -343,10 +389,41 @@ export const statistics = {
     const qs = new URLSearchParams(params as Record<string, string>).toString()
     return request<Statistics>(`/households/${householdId}/statistics${qs ? `?${qs}` : ''}`)
   },
+  categoryDetail: (householdId: string, categoryId: string, params?: { month?: string; includePersonal?: boolean }) => {
+    const qs = new URLSearchParams(params as Record<string, string>).toString()
+    return request<CategoryDetail>(`/households/${householdId}/statistics/category/${categoryId}${qs ? `?${qs}` : ''}`)
+  },
   exportCsv: (householdId: string, params?: { month?: string; includePersonal?: boolean }) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString()
     return fetch(`/api/v1/households/${householdId}/statistics/export${qs ? `?${qs}` : ''}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
   },
+}
+
+// ─── Categories ─────────────────────────────────────────────────────────────
+
+export const categories = {
+  list: (householdId: string) =>
+    request<{ categories: CategoryInfo[] }>(`/households/${householdId}/categories`),
+
+  rename: (householdId: string, categoryId: string, name: string) =>
+    request<{ id: string; name: string; merged: boolean }>(
+      `/households/${householdId}/categories/${categoryId}`,
+      { method: 'PATCH', body: JSON.stringify({ name }) }
+    ),
+
+  remove: (householdId: string, categoryId: string) =>
+    request<void>(`/households/${householdId}/categories/${categoryId}`, { method: 'DELETE' }),
+
+  updateLineItemCategory: (
+    householdId: string,
+    expenseId: string,
+    lineItemId: string,
+    categoryName: string
+  ) =>
+    request<CategoryUpdateResult>(
+      `/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}/category`,
+      { method: 'PATCH', body: JSON.stringify({ categoryName }) }
+    ),
 }

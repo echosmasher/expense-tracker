@@ -55,6 +55,9 @@ function SettlementCard({
         <div className="history-card-left">
           <span className="history-period">
             {monthLabel(summary.periodYear, summary.periodMonth)}
+            <span className="history-created">
+              {new Date(summary.createdAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
           </span>
           {totalTransferred !== null && (
             <span className="history-total">{formatNok(totalTransferred)} transferred</span>
@@ -232,6 +235,15 @@ export function History() {
           font-weight: 500;
           color: #f4f4f5;
           text-transform: capitalize;
+          display: flex;
+          align-items: baseline;
+          gap: 0.5rem;
+        }
+        .history-created {
+          font-size: 0.72rem;
+          font-weight: 400;
+          color: #52525b;
+          text-transform: none;
         }
         .history-total {
           font-family: 'DM Mono', monospace;

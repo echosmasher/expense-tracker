@@ -107,6 +107,62 @@ router.get('/', async (req, res, next) => {
       })
     }
 
+    // Total by category for the month
+    const byCategoryResult = await db.query<{
+      category_id: string | null
+      category_name: string | null
+      total_ore: string
+      item_count: string
+    }>(
+      `SELECT li.category_id, c.name as category_name,
+              SUM(li.unit_price_ore * li.quantity)::bigint as total_ore,
+              COUNT(*)::int as item_count
+       FROM line_items li
+       JOIN expenses e ON e.id = li.expense_id
+       LEFT JOIN categories c ON c.id = li.category_id
+       WHERE e.household_id = $1
+         AND e.status IN ('confirmed', 'settled')
+         AND e.project_id IS NULL
+         AND EXTRACT(YEAR FROM e.expense_date) = $2
+         AND EXTRACT(MONTH FROM e.expense_date) = $3
+         ${personalFilter}
+       GROUP BY li.category_id, c.name
+       ORDER BY total_ore DESC`,
+      [householdId, year, mon]
+    )
+
+    // 6-month category trends
+    const categoryTrendResult = await db.query<{
+      month: string
+      category_id: string | null
+      category_name: string | null
+      total_ore: string
+    }>(
+      `SELECT TO_CHAR(e.expense_date, 'YYYY-MM') as month,
+              li.category_id, c.name as category_name,
+              SUM(li.unit_price_ore * li.quantity)::bigint as total_ore
+       FROM line_items li
+       JOIN expenses e ON e.id = li.expense_id
+       LEFT JOIN categories c ON c.id = li.category_id
+       WHERE e.household_id = $1
+         AND e.status IN ('confirmed', 'settled')
+         AND e.project_id IS NULL
+         AND e.expense_date >= (DATE_TRUNC('month', NOW()) - INTERVAL '5 months')
+       GROUP BY month, li.category_id, c.name
+       ORDER BY month, total_ore DESC`,
+      [householdId]
+    )
+
+    const categoryTrendMap: Record<string, Array<{ categoryId: string | null; categoryName: string; totalOre: number }>> = {}
+    for (const row of categoryTrendResult.rows) {
+      if (!categoryTrendMap[row.month]) categoryTrendMap[row.month] = []
+      categoryTrendMap[row.month]!.push({
+        categoryId: row.category_id,
+        categoryName: row.category_name ?? 'Uncategorized',
+        totalOre: parseInt(row.total_ore, 10),
+      })
+    }
+
     const totalOre = byTagResult.rows.reduce((sum, r) => sum + parseInt(r.total_ore, 10), 0)
 
     res.json({
@@ -128,6 +184,94 @@ router.get('/', async (req, res, next) => {
         count: parseInt(r.count, 10),
       })),
       trends: Object.entries(trendMap).map(([month, byTag]) => ({ month, byTag })),
+      byCategory: byCategoryResult.rows.map((r) => ({
+        categoryId: r.category_id,
+        categoryName: r.category_name ?? 'Uncategorized',
+        totalOre: parseInt(r.total_ore, 10),
+        itemCount: parseInt(r.item_count, 10),
+      })),
+      categoryTrends: Object.entries(categoryTrendMap).map(([month, byCategory]) => ({ month, byCategory })),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /households/:householdId/statistics/category/:categoryId ────────────
+
+router.get('/category/:categoryId', async (req, res, next) => {
+  try {
+    const { householdId, categoryId } = req.params as { householdId: string; categoryId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+
+    const { month, includePersonal } = req.query as { month?: string; includePersonal?: string }
+    const targetMonth = month ?? new Date().toISOString().slice(0, 7)
+    const [year, mon] = targetMonth.split('-').map(Number)
+    const showPersonal = includePersonal === 'true'
+
+    const personalFilter = showPersonal
+      ? ''
+      : `AND (li.is_personal = false OR (li.is_personal = true AND e.purchased_by = '${userId}'))`
+
+    const isUncategorized = categoryId === 'uncategorized'
+    const categoryFilter = isUncategorized ? 'AND li.category_id IS NULL' : 'AND li.category_id = $4'
+    const params: unknown[] = [householdId, year, mon]
+    if (!isUncategorized) params.push(categoryId)
+
+    const result = await db.query<{
+      line_item_id: string
+      description: string
+      quantity: number
+      unit_price_ore: number
+      is_personal: boolean
+      expense_id: string
+      store: string | null
+      expense_date: string | null
+      purchaser_name: string
+    }>(
+      `SELECT li.id as line_item_id, li.description, li.quantity, li.unit_price_ore,
+              li.is_personal,
+              e.id as expense_id, e.store, e.expense_date, u.name as purchaser_name
+       FROM line_items li
+       JOIN expenses e ON e.id = li.expense_id
+       JOIN users u ON u.id = e.purchased_by
+       WHERE e.household_id = $1
+         AND e.status IN ('confirmed', 'settled')
+         AND e.project_id IS NULL
+         AND EXTRACT(YEAR FROM e.expense_date) = $2
+         AND EXTRACT(MONTH FROM e.expense_date) = $3
+         ${categoryFilter}
+         ${personalFilter}
+       ORDER BY e.expense_date DESC, e.id, li.id
+       LIMIT 200`,
+      params
+    )
+
+    // Look up category name
+    let categoryName = 'Uncategorized'
+    if (!isUncategorized) {
+      const catResult = await db.query<{ name: string }>(
+        'SELECT name FROM categories WHERE id = $1',
+        [categoryId]
+      )
+      if (catResult.rows[0]) categoryName = catResult.rows[0].name
+    }
+
+    res.json({
+      categoryId: isUncategorized ? null : categoryId,
+      categoryName,
+      items: result.rows.map((r) => ({
+        lineItemId: r.line_item_id,
+        description: r.description,
+        quantity: r.quantity,
+        unitPriceOre: r.unit_price_ore,
+        isPersonal: r.is_personal,
+        expenseId: r.expense_id,
+        store: r.store,
+        expenseDate: r.expense_date,
+        purchaserName: r.purchaser_name,
+      })),
     })
   } catch (err) {
     next(err)
@@ -156,13 +300,16 @@ router.get('/export', async (req, res, next) => {
       unit_price_ore: number
       tag_name: string | null
       is_personal: boolean
+      category_name: string | null
     }>(
       `SELECT e.expense_date, e.store, u.name as purchaser_name, e.card_last_four,
-              li.description, li.quantity, li.unit_price_ore, t.name as tag_name, li.is_personal
+              li.description, li.quantity, li.unit_price_ore, t.name as tag_name, li.is_personal,
+              cat.name as category_name
        FROM line_items li
        JOIN expenses e ON e.id = li.expense_id
        JOIN users u ON u.id = e.purchased_by
        LEFT JOIN tags t ON t.id = li.tag_id
+       LEFT JOIN categories cat ON cat.id = li.category_id
        WHERE e.household_id = $1
          AND e.status IN ('confirmed', 'settled')
          AND e.project_id IS NULL
@@ -174,7 +321,7 @@ router.get('/export', async (req, res, next) => {
 
     const formatNok = (ore: number) => (ore / 100).toFixed(2)
 
-    const header = 'Date,Store,Purchased by,Card,Item,Quantity,Unit price (kr),Tag,Personal'
+    const header = 'Date,Store,Purchased by,Card,Item,Quantity,Unit price (kr),Tag,Category,Personal'
     const rows = result.rows.map((r) =>
       [
         r.expense_date?.toString().slice(0, 10) ?? '',
@@ -185,6 +332,7 @@ router.get('/export', async (req, res, next) => {
         r.quantity,
         formatNok(r.unit_price_ore),
         `"${(r.tag_name ?? '').replace(/"/g, '""')}"`,
+        `"${(r.category_name ?? '').replace(/"/g, '""')}"`,
         r.is_personal ? 'Yes' : 'No',
       ].join(',')
     )
