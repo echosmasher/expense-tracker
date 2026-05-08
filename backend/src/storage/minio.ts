@@ -8,15 +8,29 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 
 const BUCKET = process.env.MINIO_BUCKET ?? 'receipts'
+const INTERNAL_ENDPOINT = process.env.MINIO_ENDPOINT ?? 'http://localhost:9000'
+// MINIO_PUBLIC_ENDPOINT is what the browser uses; falls back to internal when unset (dev).
+const PUBLIC_ENDPOINT = process.env.MINIO_PUBLIC_ENDPOINT ?? INTERNAL_ENDPOINT
 
+const credentials = {
+  accessKeyId: process.env.MINIO_ACCESS_KEY ?? '',
+  secretAccessKey: process.env.MINIO_SECRET_KEY ?? '',
+}
+
+// Used for server→MinIO traffic (uploads, bucket admin) over the Docker network.
 const s3 = new S3Client({
-  endpoint: process.env.MINIO_ENDPOINT ?? 'http://localhost:9000',
+  endpoint: INTERNAL_ENDPOINT,
   region: 'us-east-1', // MinIO ignores this but AWS SDK requires it
-  credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY ?? '',
-    secretAccessKey: process.env.MINIO_SECRET_KEY ?? '',
-  },
+  credentials,
   forcePathStyle: true, // required for MinIO
+})
+
+// Used only to mint presigned URLs that the browser can resolve.
+const s3Public = new S3Client({
+  endpoint: PUBLIC_ENDPOINT,
+  region: 'us-east-1',
+  credentials,
+  forcePathStyle: true,
 })
 
 /** Ensure the receipts bucket exists (call once on startup). */
@@ -58,7 +72,7 @@ export async function getReceiptUrl(
   expirySeconds = 3600
 ): Promise<string> {
   return getSignedUrl(
-    s3,
+    s3Public,
     new GetObjectCommand({ Bucket: BUCKET, Key: key }),
     { expiresIn: expirySeconds }
   )

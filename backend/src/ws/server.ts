@@ -29,8 +29,10 @@ function removeFromAllRooms(socket: AuthenticatedSocket) {
 }
 
 export type WsEvent =
-  | { type: 'expense.confirmed'; householdId: string; expenseId: string }
+  | { type: 'expense.confirmed'; householdId: string; expenseId: string; confirmedBy: string }
   | { type: 'settlement.ready'; householdId: string; settlementId: string }
+  | { type: 'settlement.completed'; householdId: string; settlementId: string }
+  | { type: 'project.settlement.ready'; householdId: string; projectId: string; settlementId: string }
   | { type: 'settlement.transaction.updated'; settlementId: string; transactionId: string; paidAt: string }
 
 /** Broadcast an event to all authenticated members of a household. */

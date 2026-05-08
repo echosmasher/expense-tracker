@@ -335,7 +335,7 @@ projectDetailRouter.post('/finish', async (req, res, next) => {
       return sid
     })
 
-    broadcast(project.household_id, { type: 'project.settlement.ready', projectId, settlementId })
+    broadcast(project.household_id, { type: 'project.settlement.ready', householdId: project.household_id, projectId, settlementId })
 
     const sResult = await db.query('SELECT * FROM settlements WHERE id = $1', [settlementId])
     res.json(sResult.rows[0])

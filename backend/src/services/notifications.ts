@@ -51,7 +51,7 @@ export async function sendSettlementReadyPush(params: {
  */
 export async function getHouseholdPushTokens(
   householdId: string,
-  db: { query: <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }> }
+  db: import('../db/client.js').DbClient
 ): Promise<string[]> {
   try {
     const result = await db.query<{ token: string }>(

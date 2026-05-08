@@ -57,7 +57,7 @@ export function CategoryTrends() {
   const activeLabels = selectedTag ? [selectedTag] : allLabels
 
   const chartData = trends.map((t) => {
-    const entries = view === 'tag' ? t.byTag : (t as any).byCategory
+    const entries = view === 'tag' ? (t as any).byTag : (t as any).byCategory
     const row: Record<string, string | number> = {
       month: t.month.slice(0, 7),
     }
@@ -167,7 +167,7 @@ export function CategoryTrends() {
               <h2 className="trends-section-title">Monthly totals</h2>
               <div className="trends-table">
                 {[...trends].reverse().map((t) => {
-                  const entries = view === 'tag' ? t.byTag : (t as any).byCategory
+                  const entries = view === 'tag' ? (t as any).byTag : (t as any).byCategory
                   return (
                     <div key={t.month} className="trends-table-row">
                       <span className="tt-month">

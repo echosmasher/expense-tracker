@@ -199,7 +199,7 @@ router.post('/', async (req, res, next) => {
     })
 
     // Broadcast settlement ready event
-    broadcast(householdId, { type: 'settlement.ready', settlementId: settlement })
+    broadcast(householdId, { type: 'settlement.ready', householdId, settlementId: settlement })
 
     // Send email to all household members
     const membersResult = await db.query<{ email: string; name: string }>(
@@ -369,7 +369,7 @@ settlementTransactionRouter.patch('/:transactionId', async (req, res, next) => {
       })
 
       if (settlement.household_id) {
-        broadcast(settlement.household_id, { type: 'settlement.completed', settlementId })
+        broadcast(settlement.household_id, { type: 'settlement.completed', householdId: settlement.household_id, settlementId })
       }
     }
 

@@ -231,6 +231,7 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
 
     broadcast(householdId, {
       type: 'expense.confirmed',
+      householdId,
       expenseId,
       confirmedBy: userId,
     })

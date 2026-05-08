@@ -171,7 +171,7 @@ export interface Household {
 }
 
 export const households = {
-  create: (body: { name: string; address?: string; allocationKey: Array<{ userId: string; shareBp: number }> }) =>
+  create: (body: { name: string; address?: string | undefined; allocationKey: Array<{ userId: string; shareBp: number }> }) =>
     request<Household>('/households', { method: 'POST', body: JSON.stringify(body) }),
 
   listMine: () =>
@@ -252,18 +252,18 @@ export const expenses = {
     return request<{ expenses: Expense[] }>(`/households/${householdId}/expenses${qs ? `?${qs}` : ''}`)
   },
   create: (householdId: string, body: {
-    receiptImageKey?: string
-    store?: string
-    date?: string
+    receiptImageKey?: string | undefined
+    store?: string | undefined
+    date?: string | undefined
     purchasedBy: string
-    cardLastFour?: string
+    cardLastFour?: string | undefined
     lineItems: Array<{
       description: string
       quantity: number
       unitPriceOre: number
-      tagId?: string
-      isPersonal?: boolean
-      categoryId?: string
+      tagId?: string | undefined
+      isPersonal?: boolean | undefined
+      categoryId?: string | undefined
     }>
   }) =>
     request<Expense>(`/households/${householdId}/expenses`, { method: 'POST', body: JSON.stringify(body) }),
@@ -320,7 +320,7 @@ export interface Project {
   name: string
   description: string | null
   status: 'active' | 'settling' | 'settled'
-  members: Array<{ userId: string; name: string }>
+  members: Array<{ userId: string; name: string; role: 'admin' | 'member' }>
   allocationKey: Array<{ userId: string; name: string; shareBp: number }>
 }
 
