@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { logger } from '../logger.js'
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -8,7 +9,7 @@ const pool = new pg.Pool({
 })
 
 pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error:', err)
+  logger.error({ err }, 'Unexpected PostgreSQL pool error')
 })
 
 export const db = {
@@ -24,7 +25,7 @@ export const db = {
     const result = await pool.query<T>(text, values)
     const duration = Date.now() - start
     if (duration > 1000) {
-      console.warn(`Slow query (${duration}ms):`, text.slice(0, 120))
+      logger.warn({ durationMs: duration, query: text.slice(0, 120) }, 'Slow query')
     }
     return result
   },

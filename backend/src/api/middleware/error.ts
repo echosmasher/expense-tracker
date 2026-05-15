@@ -13,7 +13,7 @@ export class AppError extends Error {
 
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ): void {
@@ -22,6 +22,8 @@ export function errorHandler(
     return
   }
 
-  console.error('Unhandled error:', err)
+  // pino-http attaches req.log as a request-scoped logger with the request ID
+  // and route context, so this 5xx line correlates with the request log line.
+  req.log.error({ err }, 'Unhandled error')
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } })
 }

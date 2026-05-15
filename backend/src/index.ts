@@ -4,10 +4,12 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import helmet from 'helmet'
+import { pinoHttp } from 'pino-http'
 import { router } from './api/router.js'
 import { errorHandler } from './api/middleware/error.js'
 import { ensureBucket } from './storage/minio.js'
 import { db } from './db/client.js'
+import { logger } from './logger.js'
 
 const app = express()
 const server = http.createServer(app)
@@ -22,19 +24,17 @@ app.use(cors({ origin: config.WEB_ORIGIN, credentials: true }))
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 
-// Request logger
-app.use((req, _res, next) => {
-  console.log(`${req.method} ${req.path}`)
-  next()
-})
+// Structured request logging with auto-generated request IDs.
+// req.log is request-scoped and includes the ID, so downstream logs correlate.
+app.use(pinoHttp({ logger }))
 
 // Routes
-app.get('/health', async (_req, res) => {
+app.get('/health', async (req, res) => {
   try {
     await db.query('SELECT 1')
     res.json({ status: 'ok' })
   } catch (err) {
-    console.error('Health check failed:', err)
+    req.log.error({ err }, 'Health check failed')
     res.status(503).json({ status: 'unhealthy', reason: 'database unreachable' })
   }
 })
@@ -46,7 +46,7 @@ app.use(errorHandler)
 async function start() {
   await ensureBucket()
   server.listen(config.PORT, () => {
-    console.log(`API server listening on port ${config.PORT}`)
+    logger.info({ port: config.PORT }, 'API server listening')
   })
 }
 
@@ -55,24 +55,24 @@ let isShuttingDown = false
 async function shutdown(signal: string) {
   if (isShuttingDown) return
   isShuttingDown = true
-  console.log(`Received ${signal}, shutting down...`)
+  logger.info({ signal }, 'Shutting down')
 
   // Hard timeout: if cleanup hangs, exit anyway. Docker SIGKILLs at 10s by default.
   const forceExit = setTimeout(() => {
-    console.error('Forced shutdown after 8s — cleanup hung')
+    logger.error('Forced shutdown after 8s — cleanup hung')
     process.exit(1)
   }, 8_000)
   forceExit.unref()
 
   server.close(async (err) => {
-    if (err) console.error('Error closing HTTP server:', err)
+    if (err) logger.error({ err }, 'Error closing HTTP server')
     try {
       await db.end()
-      console.log('Shutdown complete.')
+      logger.info('Shutdown complete')
       clearTimeout(forceExit)
       process.exit(err ? 1 : 0)
     } catch (poolErr) {
-      console.error('Error closing DB pool:', poolErr)
+      logger.error({ err: poolErr }, 'Error closing DB pool')
       process.exit(1)
     }
   })
@@ -82,7 +82,7 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'))
 process.on('SIGINT', () => void shutdown('SIGINT'))
 
 start().catch((err) => {
-  console.error('Startup failed:', err)
+  logger.fatal({ err }, 'Startup failed')
   process.exit(1)
 })
 
