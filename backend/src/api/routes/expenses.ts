@@ -28,7 +28,7 @@ async function requireActiveMember(householdId: string, userId: string) {
 
 const LineItemSchema = z.object({
   description: z.string().min(1),
-  quantity: z.number().positive(),
+  quantity: z.number().int().positive(),
   unitPriceOre: z.number().int('Unit price must be an integer (øre)'),
   tagId: z.string().uuid().optional(),
   isPersonal: z.boolean().default(false),
@@ -77,8 +77,16 @@ router.post('/', async (req, res, next) => {
       keywords
     )
 
-    const totalAmountOre = body.lineItems.reduce(
-      (sum, item) => sum + item.unitPriceOre * item.quantity,
+    // Resolve final isPersonal per line (user choice OR auto-tag) before computing the
+    // household-billable total. total_amount_ore must exclude personal items — it feeds
+    // settlement.householdAmountOre, and the edit/PATCH path already excludes them.
+    const resolvedLineItems = body.lineItems.map((item, i) => ({
+      ...item,
+      isPersonal: item.isPersonal || (taggedItems[i]?.isPersonal ?? false),
+    }))
+
+    const totalAmountOre = resolvedLineItems.reduce(
+      (sum, item) => (item.isPersonal ? sum : sum + item.unitPriceOre * item.quantity),
       0
     )
 
@@ -100,11 +108,7 @@ router.post('/', async (req, res, next) => {
       )
       const expenseId = expResult.rows[0]!.id
 
-      for (let i = 0; i < body.lineItems.length; i++) {
-        const item = body.lineItems[i]!
-        const autoPersonal = taggedItems[i]?.isPersonal ?? false
-        const isPersonal = item.isPersonal || autoPersonal
-
+      for (const item of resolvedLineItems) {
         await client.query(
           `INSERT INTO line_items
              (expense_id, description, quantity, unit_price_ore, tag_id, is_personal, category_id)
@@ -115,7 +119,7 @@ router.post('/', async (req, res, next) => {
             item.quantity,
             item.unitPriceOre,
             item.tagId ?? null,
-            isPersonal,
+            item.isPersonal,
             item.categoryId ?? null,
           ]
         )

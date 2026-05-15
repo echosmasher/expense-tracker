@@ -197,7 +197,7 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
 
     const LineItemSchema = z.object({
       description: z.string().min(1),
-      quantity: z.number().positive(),
+      quantity: z.number().int().positive(),
       unitPriceOre: z.number().int(),
       isPersonal: z.boolean().default(false),
     })
@@ -210,7 +210,11 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       lineItems: z.array(LineItemSchema).min(1),
     }).parse(req.body)
 
-    const totalAmountOre = body.lineItems.reduce((sum, li) => sum + li.unitPriceOre * li.quantity, 0)
+    // Exclude personal items — total_amount_ore is the project-billable amount
+    const totalAmountOre = body.lineItems.reduce(
+      (sum, li) => (li.isPersonal ? sum : sum + li.unitPriceOre * li.quantity),
+      0,
+    )
 
     const expenseId = await db.transaction(async (client) => {
       const expResult = await client.query<{ id: string }>(
