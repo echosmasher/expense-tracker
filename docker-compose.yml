@@ -49,11 +49,11 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: receipts
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@expensetracker.app}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost}
       PORT: 3001
     depends_on:
       db:
