@@ -16,7 +16,9 @@ services:
       start_period: 10s
 
   storage:
-    image: minio/minio:latest
+    # Pinned to avoid silent breakage on `docker compose pull`.
+    # Bump intentionally — check the MinIO release notes for breaking changes.
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
