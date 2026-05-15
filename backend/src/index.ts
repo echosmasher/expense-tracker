@@ -5,7 +5,6 @@ import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import { router } from './api/router.js'
 import { errorHandler } from './api/middleware/error.js'
-import { createWsServer } from './ws/server.js'
 import { ensureBucket } from './storage/minio.js'
 import { db } from './db/client.js'
 
@@ -34,13 +33,10 @@ app.use('/api/v1', router)
 // Error handler (must be last)
 app.use(errorHandler)
 
-// WebSocket server attached to same HTTP server
-const wss = createWsServer(server)
-
 async function start() {
   await ensureBucket()
   server.listen(config.PORT, () => {
-    console.log(`API + WS server listening on port ${config.PORT}`)
+    console.log(`API server listening on port ${config.PORT}`)
   })
 }
 
@@ -57,10 +53,6 @@ async function shutdown(signal: string) {
     process.exit(1)
   }, 8_000)
   forceExit.unref()
-
-  // Terminate WS clients (they'll reconnect via the client's normal logic)
-  for (const client of wss.clients) client.terminate()
-  wss.close()
 
   server.close(async (err) => {
     if (err) console.error('Error closing HTTP server:', err)

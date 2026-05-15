@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { db } from '../../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
-import { broadcast } from '../../ws/server.js'
 import { calculateSettlement } from '@expense-tracker/shared'
 
 const router = Router({ mergeParams: true })
@@ -338,8 +337,6 @@ projectDetailRouter.post('/finish', async (req, res, next) => {
       }
       return sid
     })
-
-    broadcast(project.household_id, { type: 'project.settlement.ready', householdId: project.household_id, projectId, settlementId })
 
     const sResult = await db.query('SELECT * FROM settlements WHERE id = $1', [settlementId])
     res.json(sResult.rows[0])

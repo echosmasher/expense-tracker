@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { db } from '../../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
-import { broadcast } from '../../ws/server.js'
 import { calculateSettlement } from '@expense-tracker/shared'
 import { sendSettlementReadyEmail } from '../../services/email.js'
 import { sendSettlementReadyPush, getHouseholdPushTokens } from '../../services/notifications.js'
@@ -198,9 +197,6 @@ router.post('/', async (req, res, next) => {
       return settlementId
     })
 
-    // Broadcast settlement ready event
-    broadcast(householdId, { type: 'settlement.ready', householdId, settlementId: settlement })
-
     // Send email to all household members
     const membersResult = await db.query<{ email: string; name: string }>(
       `SELECT u.email, u.name FROM users u
@@ -367,10 +363,6 @@ settlementTransactionRouter.patch('/:transactionId', async (req, res, next) => {
           )
         }
       })
-
-      if (settlement.household_id) {
-        broadcast(settlement.household_id, { type: 'settlement.completed', householdId: settlement.household_id, settlementId })
-      }
     }
 
     res.json({ id: transactionId, paidAt: now })

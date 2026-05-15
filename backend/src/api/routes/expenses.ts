@@ -5,7 +5,6 @@ import { AppError } from '../middleware/error.js'
 import { db } from '../../db/client.js'
 import { getReceiptUrl } from '../../storage/minio.js'
 import { tagLineItems } from '../../services/tagMatcher.js'
-import { broadcast } from '../../ws/server.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -232,13 +231,6 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
       "UPDATE expenses SET status = 'confirmed', updated_at = now() WHERE id = $1",
       [expenseId]
     )
-
-    broadcast(householdId, {
-      type: 'expense.confirmed',
-      householdId,
-      expenseId,
-      confirmedBy: userId,
-    })
 
     const updated = await getFullExpense(expenseId, userId)
     res.json(updated)
