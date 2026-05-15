@@ -6,6 +6,7 @@ import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
 import { parseReceipt } from '../../services/receiptParser.js'
 import { categorizeLineItems } from '../../services/categoryService.js'
 import { db } from '../../db/client.js'
+import { receiptParseLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -27,7 +28,7 @@ const upload = multer({
 
 // ─── POST /receipts/parse ─────────────────────────────────────────────────────
 
-router.post('/parse', upload.single('receipt'), async (req, res, next) => {
+router.post('/parse', receiptParseLimiter, upload.single('receipt'), async (req, res, next) => {
   try {
     if (!req.file) {
       throw new AppError(400, 'NO_FILE', 'No receipt file uploaded')

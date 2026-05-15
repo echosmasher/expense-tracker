@@ -6,8 +6,10 @@ import { z } from 'zod'
 import { db } from '../../db/client.js'
 import { AppError } from '../middleware/error.js'
 import { sendInviteEmail } from '../../services/email.js'
+import { authLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
+router.use(authLimiter)
 
 const BCRYPT_ROUNDS = 12
 const ACCESS_TOKEN_TTL = '15m'

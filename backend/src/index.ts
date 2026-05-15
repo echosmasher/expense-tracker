@@ -12,6 +12,10 @@ import { db } from './db/client.js'
 const app = express()
 const server = http.createServer(app)
 
+// In prod, nginx is the single reverse-proxy hop in front of the API.
+// Without this, rate limiting would key on the nginx container IP.
+app.set('trust proxy', 1)
+
 // Middleware
 app.use(cors({ origin: config.WEB_ORIGIN, credentials: true }))
 app.use(express.json({ limit: '1mb' }))
