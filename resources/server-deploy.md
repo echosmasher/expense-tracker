@@ -1,5 +1,7 @@
 # Server Deployment Guide
 
+Dear Michael
+
 This guide walks you through deploying the **expense-tracker** app on a Docker host. Marit and I have already wired the project for production deployment — this is just the operational steps.
 
 ## What you're deploying
