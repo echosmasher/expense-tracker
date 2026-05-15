@@ -27,7 +27,15 @@ app.use((req, _res, next) => {
 })
 
 // Routes
-app.get('/health', (_req, res) => res.json({ status: 'ok' }))
+app.get('/health', async (_req, res) => {
+  try {
+    await db.query('SELECT 1')
+    res.json({ status: 'ok' })
+  } catch (err) {
+    console.error('Health check failed:', err)
+    res.status(503).json({ status: 'unhealthy', reason: 'database unreachable' })
+  }
+})
 app.use('/api/v1', router)
 
 // Error handler (must be last)

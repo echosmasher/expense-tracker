@@ -160,7 +160,7 @@ From the server itself:
 
 ```bash
 curl -I http://localhost/         # should return 200 from nginx
-curl http://localhost/api/v1/health   # should return JSON like {"status":"ok"}
+curl http://localhost/health   # should return JSON like {"status":"ok"}
 ```
 
 From your phone or laptop, open `http://<server-host-or-ip>/` in a browser. You should see the login screen.
