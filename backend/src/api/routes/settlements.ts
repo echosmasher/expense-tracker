@@ -5,7 +5,6 @@ import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { calculateSettlement } from '@expense-tracker/shared'
 import { sendSettlementReadyEmail } from '../../services/email.js'
-import { sendSettlementReadyPush, getHouseholdPushTokens } from '../../services/notifications.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -226,18 +225,6 @@ router.post('/', async (req, res, next) => {
         amountOre: t.amountOre,
       })),
     })
-
-    // Send iOS push notifications (non-blocking, best-effort)
-    getHouseholdPushTokens(householdId, db).then((tokens) => {
-      if (tokens.length > 0) {
-        sendSettlementReadyPush({
-          householdId,
-          householdName: household.name,
-          settlementId: settlement,
-          tokens,
-        })
-      }
-    }).catch(() => { /* non-fatal */ })
 
     const response = await buildSettlementResponse(settlement)
     res.status(201).json(response)
