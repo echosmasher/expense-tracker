@@ -1,8 +1,9 @@
 /**
- * Receipt parsing service — uses Anthropic multimodal API to extract
+ * Receipt parsing service — uses OpenAI multimodal (gpt-4o-mini) to extract
  * structured data from a receipt image (Norwegian/Swedish/English).
  *
- * SC-001: 15-second timeout enforced via Promise.race.
+ * 15-second timeout enforced via AbortSignal so the underlying request is
+ * actually cancelled — not just orphaned to burn quota in the background.
  * On timeout or API failure, returns empty items array (never throws to caller).
  */
 import OpenAI from 'openai'
@@ -53,51 +54,46 @@ const USER_PROMPT = 'Parse this receipt image and return the structured JSON.'
 
 const TIMEOUT_MS = 15_000
 
+const EMPTY: ParsedReceipt = { store: null, date: null, detectedCardLastFour: null, items: [] }
+
 export async function parseReceipt(imageBuffer: Buffer, mimeType: string): Promise<ParsedReceipt> {
   const base64 = imageBuffer.toString('base64')
 
-  const parsePromise = client.chat.completions
-    .create({
-      model: 'gpt-4o-mini',
-      max_tokens: 2048,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}` },
-            },
-            { type: 'text', text: USER_PROMPT },
-          ],
-        },
-      ],
-    })
-    .then((response) => {
-      const text = response.choices[0]?.message?.content ?? ''
-      const parsed = JSON.parse(text) as ParsedReceipt
-      // Ensure integers
-      parsed.items = (parsed.items ?? []).map((item) => ({
-        ...item,
-        unitPriceOre: Math.round(item.unitPriceOre),
-        quantity: item.quantity ?? 1,
-      }))
-      return parsed
-    })
-
-  const timeoutPromise = new Promise<ParsedReceipt>((resolve) =>
-    setTimeout(
-      () => resolve({ store: null, date: null, detectedCardLastFour: null, items: [] }),
-      TIMEOUT_MS
-    )
-  )
-
   try {
-    return await Promise.race([parsePromise, timeoutPromise])
-  } catch {
-    // API failure — return empty result
-    return { store: null, date: null, detectedCardLastFour: null, items: [] }
+    const response = await client.chat.completions.create(
+      {
+        model: 'gpt-4o-mini',
+        max_tokens: 2048,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64}` },
+              },
+              { type: 'text', text: USER_PROMPT },
+            ],
+          },
+        ],
+      },
+      { signal: AbortSignal.timeout(TIMEOUT_MS) },
+    )
+
+    const text = response.choices[0]?.message?.content ?? ''
+    const parsed = JSON.parse(text) as ParsedReceipt
+    parsed.items = (parsed.items ?? []).map((item) => ({
+      ...item,
+      unitPriceOre: Math.max(0, Math.round(item.unitPriceOre)),
+      quantity: Math.max(1, Math.round(item.quantity ?? 1)),
+    }))
+    return parsed
+  } catch (err) {
+    // Timeout (AbortError), API failure, or invalid JSON — degrade to empty so
+    // the user can still hand-enter the line items.
+    console.warn('Receipt parse failed:', err instanceof Error ? err.message : err)
+    return EMPTY
   }
 }
