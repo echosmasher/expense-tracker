@@ -44,6 +44,11 @@ export const db = {
       client.release()
     }
   },
+
+  /** Close the pool. Call once during graceful shutdown. */
+  async end(): Promise<void> {
+    await pool.end()
+  },
 }
 
 export type DbClient = typeof db
