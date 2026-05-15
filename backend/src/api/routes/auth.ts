@@ -36,7 +36,10 @@ function setRefreshCookie(res: import('express').Response, token: string) {
   res.cookie('refresh_token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    // strict prevents the cookie being sent on any cross-site request, including
+    // top-level navigation. The refresh route is only called by our own SPA via
+    // fetch from the same origin, so strict is safe and rules out CSRF.
+    sameSite: 'strict',
     maxAge: REFRESH_TOKEN_TTL_MS,
     path: '/api/v1/auth',
   })

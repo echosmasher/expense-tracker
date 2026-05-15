@@ -3,6 +3,7 @@ import http from 'http'
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
+import helmet from 'helmet'
 import { router } from './api/router.js'
 import { errorHandler } from './api/middleware/error.js'
 import { ensureBucket } from './storage/minio.js'
@@ -16,6 +17,7 @@ const server = http.createServer(app)
 app.set('trust proxy', 1)
 
 // Middleware
+app.use(helmet())
 app.use(cors({ origin: config.WEB_ORIGIN, credentials: true }))
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
