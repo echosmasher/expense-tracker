@@ -306,12 +306,28 @@ settlementTransactionRouter.patch('/:transactionId', async (req, res, next) => {
     if (!settlement) throw new AppError(404, 'NOT_FOUND', 'Settlement not found')
     if (settlement.status !== 'open') throw new AppError(409, 'ALREADY_CLOSED', 'Settlement is already closed')
 
-    if (settlement.household_id) {
-      const memberCheck = await db.query(
-        'SELECT id FROM household_members WHERE household_id = $1 AND user_id = $2',
+    // Fetch the transaction so we can authorize the caller against it.
+    const txResult = await db.query<{ from_user_id: string; to_user_id: string; paid_at: Date | null }>(
+      'SELECT from_user_id, to_user_id, paid_at FROM settlement_transactions WHERE id = $1 AND settlement_id = $2',
+      [transactionId, settlementId]
+    )
+    const tx = txResult.rows[0]
+    if (!tx) throw new AppError(404, 'NOT_FOUND', 'Transaction not found')
+
+    // Only the debtor, the creditor, or a household admin can mark paid.
+    // For two-person households the first two cover everyone; admin covers the
+    // 3+-member case where someone else might need to mark on behalf.
+    const isParty = userId === tx.from_user_id || userId === tx.to_user_id
+    let isAuthorized = isParty
+    if (!isAuthorized && settlement.household_id) {
+      const adminCheck = await db.query(
+        "SELECT id FROM household_members WHERE household_id = $1 AND user_id = $2 AND role = 'admin'",
         [settlement.household_id, userId]
       )
-      if (memberCheck.rows.length === 0) throw new AppError(403, 'FORBIDDEN', 'Not a member')
+      isAuthorized = adminCheck.rows.length > 0
+    }
+    if (!isAuthorized) {
+      throw new AppError(403, 'FORBIDDEN', 'Only the debtor, creditor, or household admin can mark this paid')
     }
 
     const now = new Date()
