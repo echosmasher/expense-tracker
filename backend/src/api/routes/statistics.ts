@@ -32,9 +32,14 @@ router.get('/', async (req, res, next) => {
     const showPersonal = includePersonal === 'true'
 
     // Build personal filter: if not includePersonal, exclude personal line items
-    const personalFilter = showPersonal
-      ? ''
-      : `AND (li.is_personal = false OR (li.is_personal = true AND e.purchased_by = '${userId}'))`
+    // except those purchased by the requesting user (who sees their own).
+    // userId is parameterized (never interpolated) to keep the query injection-free.
+    const baseParams: unknown[] = [householdId, year, mon]
+    let personalFilter = ''
+    if (!showPersonal) {
+      baseParams.push(userId)
+      personalFilter = `AND (li.is_personal = false OR (li.is_personal = true AND e.purchased_by = $${baseParams.length}))`
+    }
 
     // Total by tag (household tag) for the month
     const byTagResult = await db.query<{ tag_id: string; tag_name: string; total_ore: string }>(
@@ -50,7 +55,7 @@ router.get('/', async (req, res, next) => {
          ${personalFilter}
        GROUP BY li.tag_id, t.name
        ORDER BY total_ore DESC`,
-      [householdId, year, mon]
+      baseParams
     )
 
     // Total by member
@@ -128,7 +133,7 @@ router.get('/', async (req, res, next) => {
          ${personalFilter}
        GROUP BY li.category_id, c.name
        ORDER BY total_ore DESC`,
-      [householdId, year, mon]
+      baseParams
     )
 
     // 6-month category trends
@@ -210,14 +215,20 @@ router.get('/category/:categoryId', async (req, res, next) => {
     const [year, mon] = targetMonth.split('-').map(Number)
     const showPersonal = includePersonal === 'true'
 
-    const personalFilter = showPersonal
-      ? ''
-      : `AND (li.is_personal = false OR (li.is_personal = true AND e.purchased_by = '${userId}'))`
-
-    const isUncategorized = categoryId === 'uncategorized'
-    const categoryFilter = isUncategorized ? 'AND li.category_id IS NULL' : 'AND li.category_id = $4'
+    // All dynamic values are parameterized; placeholder indices are derived from
+    // params.length so the order/presence of optional filters cannot collide.
     const params: unknown[] = [householdId, year, mon]
-    if (!isUncategorized) params.push(categoryId)
+    const isUncategorized = categoryId === 'uncategorized'
+    let categoryFilter = 'AND li.category_id IS NULL'
+    if (!isUncategorized) {
+      params.push(categoryId)
+      categoryFilter = `AND li.category_id = $${params.length}`
+    }
+    let personalFilter = ''
+    if (!showPersonal) {
+      params.push(userId)
+      personalFilter = `AND (li.is_personal = false OR (li.is_personal = true AND e.purchased_by = $${params.length}))`
+    }
 
     const result = await db.query<{
       line_item_id: string
