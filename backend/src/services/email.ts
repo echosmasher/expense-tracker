@@ -13,6 +13,12 @@ export async function sendInviteEmail(params: {
 }): Promise<void> {
   const link = `${APP_URL}/accept-invite?token=${params.token}`
 
+  if (process.env.NODE_ENV !== 'production') {
+    // Local-dev convenience: print the invite link so it can be opened without
+    // relying on Resend delivery to an unverified domain.
+    console.log(`[invite] ${params.to} → ${link}`)
+  }
+
   await resend.emails.send({
     from: FROM,
     to: params.to,
@@ -50,6 +56,10 @@ export async function sendSettlementReadyEmail(params: {
     .join('')
 
   const settleUrl = `${APP_URL}/settlement`
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[settlement] ${params.to.join(', ')} → ${settleUrl}`)
+  }
 
   await resend.emails.send({
     from: FROM,
