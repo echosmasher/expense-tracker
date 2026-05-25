@@ -64,9 +64,9 @@ async function buildSettlementResponse(settlementId: string) {
       [settlementId]
     ),
     db.query<{
-      id: string; expense_date: Date | null; total_amount_ore: number; store_name: string | null
+      id: string; expense_date: Date | null; total_amount_ore: number; store: string | null
     }>(
-      `SELECT e.id, e.expense_date, e.total_amount_ore, e.store_name
+      `SELECT e.id, e.expense_date, e.total_amount_ore, e.store
        FROM settlement_expenses se
        JOIN expenses e ON e.id = se.expense_id
        WHERE se.settlement_id = $1
@@ -103,7 +103,7 @@ async function buildSettlementResponse(settlementId: string) {
       id: e.id,
       expenseDate: e.expense_date,
       totalAmountOre: Number(e.total_amount_ore),
-      storeName: e.store_name,
+      storeName: e.store,
     })),
   }
 }
