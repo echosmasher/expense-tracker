@@ -48,7 +48,7 @@ export function AppShell() {
     <div className="app-shell">
       <aside className="app-sidebar">
         <div className="sidebar-brand">
-          <span className="brand-serif">felles</span>
+          <span className="brand-serif">Household Wizard</span>
           <span className="brand-dot">.</span>
         </div>
 

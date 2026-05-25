@@ -10,7 +10,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
       <div className="auth-card">
         <div className="auth-wordmark">
-          <span className="auth-wordmark-serif">felles</span>
+          <span className="auth-wordmark-serif">Household Wizard</span>
           <span className="auth-wordmark-dot">.</span>
         </div>
         {children}
