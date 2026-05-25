@@ -1,31 +1,88 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { settlements } from '@expense-tracker/shared'
-import type { Settlement } from '@expense-tracker/shared'
+import type { Settlement, SettlementHistoryRow } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 
 function formatNok(ore: number) {
   return `kr ${(Math.abs(ore) / 100).toFixed(2).replace('.', ',')}`
 }
 
-function monthLabel(year: number | null, month: number | null) {
-  if (!year || !month) return '—'
+function formatDate(value: string | null) {
+  if (!value) return null
+  return new Date(value).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function legacyMonthLabel(year: number | null, month: number | null) {
+  if (!year || !month) return null
   return new Date(year, month - 1, 1).toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
 }
 
-interface SettlementSummary {
-  id: string
-  periodYear: number
-  periodMonth: number
-  status: string
-  createdAt: string
+function primaryLabel(summary: SettlementHistoryRow): string {
+  const triggered = formatDate(summary.triggeredAt)
+  if (triggered) return `Triggered ${triggered}`
+  const legacy = legacyMonthLabel(summary.periodYear, summary.periodMonth)
+  return legacy ?? '—'
+}
+
+function coveredLabel(summary: SettlementHistoryRow): string | null {
+  if (summary.coveredFrom && summary.coveredTo) {
+    const from = formatDate(summary.coveredFrom)
+    const to = formatDate(summary.coveredTo)
+    if (from && to) return from === to ? `Covers ${from}` : `Covers ${from} – ${to}`
+  }
+  // Legacy fallback for pre-spec-003 rows with no snapshot range.
+  const legacy = legacyMonthLabel(summary.periodYear, summary.periodMonth)
+  return legacy ? `Period ${legacy}` : null
+}
+
+function IncludedExpensesByMonth({ expenses }: { expenses: Settlement['includedExpenses'] }) {
+  const groups = new Map<string, { label: string; rows: Settlement['includedExpenses']; total: number }>()
+  for (const e of expenses) {
+    const d = e.expenseDate ? new Date(e.expenseDate) : null
+    const key = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : 'unknown'
+    const label = d
+      ? d.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
+      : 'Undated'
+    if (!groups.has(key)) groups.set(key, { label, rows: [], total: 0 })
+    const g = groups.get(key)!
+    g.rows.push(e)
+    g.total += e.totalAmountOre
+  }
+  const ordered = [...groups.entries()].sort(([a], [b]) => (a < b ? 1 : -1))
+  return (
+    <div className="history-included">
+      <div className="history-included-label">Receipts in this settlement</div>
+      {ordered.map(([key, g]) => (
+        <div key={key} className="history-included-group">
+          <div className="history-included-month">
+            <span>{g.label}</span>
+            <span className="history-included-month-total">{formatNok(g.total)}</span>
+          </div>
+          {g.rows.map((row) => (
+            <div key={row.id} className="history-included-row">
+              <span className="history-included-store">
+                {row.storeName ?? 'Receipt'}
+                {row.expenseDate && (
+                  <span className="history-included-date">
+                    {' · '}{new Date(row.expenseDate).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}
+                  </span>
+                )}
+              </span>
+              <span className="history-included-amount">{formatNok(row.totalAmountOre)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function SettlementCard({
   summary,
   householdId,
 }: {
-  summary: SettlementSummary
+  summary: SettlementHistoryRow
   householdId: string
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -48,20 +105,22 @@ function SettlementCard({
   }
 
   const totalTransferred = detail?.transactions.reduce((sum, t) => sum + t.amountOre, 0) ?? null
+  const covered = coveredLabel(summary)
 
   return (
     <div className="history-card">
       <button className="history-card-header" onClick={toggleExpand}>
         <div className="history-card-left">
           <span className="history-period">
-            {monthLabel(summary.periodYear, summary.periodMonth)}
-            <span className="history-created">
-              {new Date(summary.createdAt).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}
-            </span>
+            {primaryLabel(summary)}
           </span>
-          {totalTransferred !== null && (
-            <span className="history-total">{formatNok(totalTransferred)} transferred</span>
-          )}
+          {covered && <span className="history-created">{covered}</span>}
+          <span className="history-total">
+            {formatNok(summary.totalAmountOre)} settled
+            {totalTransferred !== null && totalTransferred !== summary.totalAmountOre && (
+              <> · {formatNok(totalTransferred)} transferred</>
+            )}
+          </span>
         </div>
         <div className="history-card-right">
           <span className={`history-status history-status--${summary.status}`}>
@@ -100,6 +159,9 @@ function SettlementCard({
               ))}
             </div>
           )}
+          {detail && detail.includedExpenses.length > 0 && (
+            <IncludedExpensesByMonth expenses={detail.includedExpenses} />
+          )}
         </div>
       )}
     </div>
@@ -109,7 +171,7 @@ function SettlementCard({
 export function History() {
   const navigate = useNavigate()
   const household = useHouseholdStore((s) => s.household)
-  const [summaries, setSummaries] = useState<SettlementSummary[]>([])
+  const [summaries, setSummaries] = useState<SettlementHistoryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -117,7 +179,7 @@ export function History() {
     if (!household) return
     settlements.list(household.id)
       .then((data) => {
-        setSummaries((data as any).settlements ?? [])
+        setSummaries(data.settlements)
         setLoading(false)
       })
       .catch((err) => {
@@ -132,7 +194,7 @@ export function History() {
   return (
     <div className="history-page">
       <div className="history-topbar">
-        <button className="back-btn" onClick={() => navigate('/settlement')}>← Current</button>
+        <button className="back-btn" onClick={() => navigate('/settlement')}>← Active</button>
         <h1 className="history-title">Settlement history</h1>
       </div>
 
@@ -312,6 +374,45 @@ export function History() {
         .hb-amount { font-family: 'DM Mono', monospace; }
         .hb-amount--credit { color: #4ade80; }
         .hb-amount--debit { color: #f87171; }
+        .history-included {
+          border-top: 1px solid #27272a;
+          padding-top: 0.6rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.6rem;
+        }
+        .history-included-label {
+          font-size: 0.7rem;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #52525b;
+        }
+        .history-included-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.2rem;
+        }
+        .history-included-month {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.78rem;
+          color: #a1a1aa;
+          text-transform: capitalize;
+        }
+        .history-included-month-total {
+          font-family: 'DM Mono', monospace;
+        }
+        .history-included-row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.78rem;
+          color: #71717a;
+          padding-left: 0.75rem;
+        }
+        .history-included-store { color: #a1a1aa; }
+        .history-included-date { color: #52525b; }
+        .history-included-amount { font-family: 'DM Mono', monospace; }
       `}</style>
     </div>
   )

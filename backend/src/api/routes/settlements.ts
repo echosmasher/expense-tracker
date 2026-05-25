@@ -34,7 +34,7 @@ async function requireActiveMember(householdId: string, userId: string) {
 }
 
 async function buildSettlementResponse(settlementId: string) {
-  const [settlementResult, balancesResult, txResult] = await Promise.all([
+  const [settlementResult, balancesResult, txResult, includedResult] = await Promise.all([
     db.query<{
       id: string; household_id: string | null; project_id: string | null
       period_month: number | null; period_year: number | null
@@ -63,6 +63,16 @@ async function buildSettlementResponse(settlementId: string) {
        WHERE st.settlement_id = $1`,
       [settlementId]
     ),
+    db.query<{
+      id: string; expense_date: Date | null; total_amount_ore: number; store_name: string | null
+    }>(
+      `SELECT e.id, e.expense_date, e.total_amount_ore, e.store_name
+       FROM settlement_expenses se
+       JOIN expenses e ON e.id = se.expense_id
+       WHERE se.settlement_id = $1
+       ORDER BY e.expense_date NULLS LAST, e.id`,
+      [settlementId]
+    ),
   ])
 
   const s = settlementResult.rows[0]!
@@ -74,6 +84,7 @@ async function buildSettlementResponse(settlementId: string) {
     periodYear: s.period_year,
     status: s.status,
     createdAt: s.created_at,
+    triggeredAt: s.created_at,
     balances: balancesResult.rows.map((b) => ({
       userId: b.user_id,
       name: b.name,
@@ -87,6 +98,12 @@ async function buildSettlementResponse(settlementId: string) {
       toName: t.to_name,
       amountOre: t.amount_ore,
       paidAt: t.paid_at,
+    })),
+    includedExpenses: includedResult.rows.map((e) => ({
+      id: e.id,
+      expenseDate: e.expense_date,
+      totalAmountOre: Number(e.total_amount_ore),
+      storeName: e.store_name,
     })),
   }
 }
@@ -112,22 +129,18 @@ router.post('/', async (req, res, next) => {
       throw new AppError(400, 'NO_ALLOCATION_KEY', 'Household has no allocation key set')
     }
 
-    // Determine settlement period: previous month
-    const now = new Date()
-    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const periodYear = prevMonth.getFullYear()
-    const periodMonth = prevMonth.getMonth() + 1 // 1-indexed
-
-    // Block if there is already an open (in-progress) settlement for this period
+    // Block if there is already any open settlement for this household.
+    // Settlements are no longer period-scoped (spec 003-decouple-settlement),
+    // so we allow at most one open settlement per household at a time.
     const openExisting = await db.query(
-      `SELECT id FROM settlements WHERE household_id = $1 AND period_year = $2 AND period_month = $3 AND status = 'open'`,
-      [householdId, periodYear, periodMonth]
+      `SELECT id FROM settlements WHERE household_id = $1 AND status = 'open'`,
+      [householdId]
     )
     if (openExisting.rows.length > 0) {
-      throw new AppError(409, 'OPEN_SETTLEMENT_EXISTS', 'An open settlement already exists for this period. Complete it before creating another.')
+      throw new AppError(409, 'OPEN_SETTLEMENT_EXISTS', 'An open settlement already exists for this household. Complete it before creating another.')
     }
 
-    // Fetch all confirmed (unsettled) household expenses for the period
+    // Fetch every confirmed unsettled household expense, regardless of date.
     const expensesResult = await db.query<{
       id: string; total_amount_ore: number; purchased_by: string
     }>(
@@ -135,13 +148,12 @@ router.post('/', async (req, res, next) => {
        FROM expenses e
        WHERE e.household_id = $1
          AND e.status = 'confirmed'
-         AND EXTRACT(YEAR FROM e.expense_date) = $2
-         AND EXTRACT(MONTH FROM e.expense_date) = $3`,
-      [householdId, periodYear, periodMonth]
+         AND e.project_id IS NULL`,
+      [householdId]
     )
 
     if (expensesResult.rows.length === 0) {
-      throw new AppError(409, 'NO_EXPENSES', 'No unsettled confirmed expenses for this period')
+      throw new AppError(409, 'NO_EXPENSES', 'No unsettled confirmed expenses to settle')
     }
 
     // Fetch allocation key shares with admin flag from household_members
@@ -166,16 +178,24 @@ router.post('/', async (req, res, next) => {
     }))
     const { balances, transactions } = calculateSettlement(calcExpenses, calcShares)
 
-    // Persist settlement
+    // Persist settlement with NULL period (new model: snapshot-based, not month-based).
+    const includedExpenseIds = expensesResult.rows.map((e) => e.id)
     const settlement = await db.transaction(async (client) => {
       const sResult = await client.query<{ id: string }>(
         `INSERT INTO settlements
            (household_id, period_year, period_month, status, allocation_key_snapshot_id, triggered_by_user_id)
-         VALUES ($1, $2, $3, 'open', $4, $5)
+         VALUES ($1, NULL, NULL, 'open', $2, $3)
          RETURNING id`,
-        [householdId, periodYear, periodMonth, household.current_allocation_key_id, userId]
+        [householdId, household.current_allocation_key_id, userId]
       )
       const settlementId = sResult.rows[0]!.id
+
+      for (const expenseId of includedExpenseIds) {
+        await client.query(
+          'INSERT INTO settlement_expenses (settlement_id, expense_id) VALUES ($1, $2)',
+          [settlementId, expenseId]
+        )
+      }
 
       for (const balance of balances) {
         await client.query(
@@ -203,7 +223,7 @@ router.post('/', async (req, res, next) => {
        WHERE hm.household_id = $1`,
       [householdId]
     )
-    const periodLabel = `${prevMonth.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })}`
+    const periodLabel = `triggered ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`
     const memberMap = new Map(membersResult.rows.map((m) => [m.email, m.name]))
     // fetch user names by id for the email
     const userIds = [...new Set(transactions.flatMap((t) => [t.fromUserId, t.toUserId]))]
@@ -242,21 +262,39 @@ router.get('/', async (req, res, next) => {
     await requireActiveMember(householdId, userId)
 
     const result = await db.query<{
-      id: string; period_year: number; period_month: number; status: string; created_at: Date
+      id: string; status: string; created_at: Date
+      period_year: number | null; period_month: number | null
+      covered_from: Date | null; covered_to: Date | null
+      total_amount_ore: string | null
     }>(
-      `SELECT id, period_year, period_month, status, created_at
-       FROM settlements
-       WHERE household_id = $1 AND project_id IS NULL
-       ORDER BY period_year DESC, period_month DESC`,
+      `SELECT s.id, s.status, s.created_at, s.period_year, s.period_month,
+              t.covered_from, t.covered_to, t.total_amount_ore
+       FROM settlements s
+       LEFT JOIN (
+         SELECT se.settlement_id,
+                MIN(e.expense_date) AS covered_from,
+                MAX(e.expense_date) AS covered_to,
+                SUM(e.total_amount_ore) AS total_amount_ore
+         FROM settlement_expenses se
+         JOIN expenses e ON e.id = se.expense_id
+         GROUP BY se.settlement_id
+       ) t ON t.settlement_id = s.id
+       WHERE s.household_id = $1 AND s.project_id IS NULL
+       ORDER BY s.created_at DESC`,
       [householdId]
     )
 
     res.json({ settlements: result.rows.map((s) => ({
       id: s.id,
+      status: s.status,
+      triggeredAt: s.created_at,
+      createdAt: s.created_at,
+      coveredFrom: s.covered_from,
+      coveredTo: s.covered_to,
+      totalAmountOre: s.total_amount_ore !== null ? Number(s.total_amount_ore) : 0,
+      // Kept for legacy settlements; null on new ones.
       periodYear: s.period_year,
       periodMonth: s.period_month,
-      status: s.status,
-      createdAt: s.created_at,
     })) })
   } catch (err) {
     next(err)
@@ -349,20 +387,17 @@ settlementTransactionRouter.patch('/:transactionId', async (req, res, next) => {
           "UPDATE settlements SET status = 'completed' WHERE id = $1",
           [settlementId]
         )
-        // Mark all expenses in this period as settled
+        // Mark only the expenses snapshotted at trigger time as settled
+        // (spec 003-decouple-settlement). Project settlements have no
+        // settlement_expenses rows and continue to be handled elsewhere.
         if (settlement.household_id) {
-          const s = await client.query<{ period_year: number; period_month: number }>(
-            'SELECT period_year, period_month FROM settlements WHERE id = $1',
-            [settlementId]
-          )
-          const { period_year, period_month } = s.rows[0]!
           await client.query(
             `UPDATE expenses SET status = 'settled'
-             WHERE household_id = $1
-               AND status = 'confirmed'
-               AND EXTRACT(YEAR FROM expense_date) = $2
-               AND EXTRACT(MONTH FROM expense_date) = $3`,
-            [settlement.household_id, period_year, period_month]
+             WHERE status = 'confirmed'
+               AND id IN (
+                 SELECT expense_id FROM settlement_expenses WHERE settlement_id = $1
+               )`,
+            [settlementId]
           )
         }
       })

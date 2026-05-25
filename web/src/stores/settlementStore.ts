@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import type { Settlement } from '@expense-tracker/shared'
+import type { Settlement, SettlementHistoryRow } from '@expense-tracker/shared'
 
 interface SettlementState {
   currentSettlement: Settlement | null
-  history: Settlement[]
+  history: SettlementHistoryRow[]
   setCurrentSettlement: (s: Settlement | null) => void
-  setHistory: (history: Settlement[]) => void
+  setHistory: (history: SettlementHistoryRow[]) => void
   updateTransaction: (settlementId: string, transactionId: string, paidAt: string) => void
 }
 

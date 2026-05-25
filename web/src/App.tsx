@@ -18,7 +18,7 @@ import { ExpenseDetail } from './pages/Expenses/ExpenseDetail'
 import { AddExpense } from './pages/Expenses/AddExpense'
 
 // Settlement
-import { CurrentMonth } from './pages/Settlement/CurrentMonth'
+import { ActiveSettlement } from './pages/Settlement/Active'
 import { History } from './pages/Settlement/History'
 
 // Projects
@@ -65,7 +65,7 @@ export function App() {
           <Route path="/expenses/new" element={<AddExpense />} />
           <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
 
-          <Route path="/settlement" element={<CurrentMonth />} />
+          <Route path="/settlement" element={<ActiveSettlement />} />
           <Route path="/settlement/history" element={<History />} />
 
           <Route path="/projects" element={<ProjectList />} />

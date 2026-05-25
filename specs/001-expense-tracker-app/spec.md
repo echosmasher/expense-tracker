@@ -55,6 +55,8 @@ A member uploads a photo of a grocery receipt. The app parses it into line items
 
 ### User Story 3 — Monthly Settlement (Priority: P1)
 
+> **Superseded in part by [spec 003-decouple-settlement](../003-decouple-settlement/spec.md)**: settlements are no longer bound to a calendar month. The admin triggers settlement on their own cadence and the system pulls in every confirmed-but-unsettled expense at that instant, regardless of when it was purchased. Statistics continue to bucket by `expense_date` month. The acceptance scenarios below still describe the math, but "for a month" should be read as "for the set of confirmed expenses at trigger time".
+
 At the end of each month, the household admin triggers settlement. The app calculates who owes whom, shows the net amounts, and members pay each other manually via Vipps (the app shows the amount and recipient only — no payment link).
 
 **Why this priority**: Settlement is the core value proposition — turning shared expense tracking into actionable, fair payment resolution.

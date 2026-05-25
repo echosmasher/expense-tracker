@@ -282,11 +282,20 @@ export const expenses = {
 
 // ─── Settlements ─────────────────────────────────────────────────────────────
 
+export interface IncludedExpense {
+  id: string
+  expenseDate: string | null
+  totalAmountOre: number
+  storeName: string | null
+}
+
 export interface Settlement {
   id: string
+  status: 'open' | 'completed'
+  triggeredAt: string
+  // Legacy fields, retained for historical (pre-spec-003) settlements only.
   periodMonth: number | null
   periodYear: number | null
-  status: 'open' | 'completed'
   balances: Array<{ userId: string; name: string; amountOre: number }>
   transactions: Array<{
     id: string
@@ -297,11 +306,24 @@ export interface Settlement {
     amountOre: number
     paidAt: string | null
   }>
+  includedExpenses: IncludedExpense[]
+}
+
+export interface SettlementHistoryRow {
+  id: string
+  status: 'open' | 'completed'
+  triggeredAt: string
+  coveredFrom: string | null
+  coveredTo: string | null
+  totalAmountOre: number
+  // Legacy fields, retained for historical (pre-spec-003) settlements only.
+  periodMonth: number | null
+  periodYear: number | null
 }
 
 export const settlements = {
   list: (householdId: string) =>
-    request<{ settlements: Settlement[] }>(`/households/${householdId}/settlements`),
+    request<{ settlements: SettlementHistoryRow[] }>(`/households/${householdId}/settlements`),
   trigger: (householdId: string) =>
     request<Settlement>(`/households/${householdId}/settlements`, { method: 'POST' }),
   get: (householdId: string, settlementId: string) =>

@@ -10,9 +10,22 @@ function formatNok(ore: number) {
   return `kr ${(Math.abs(ore) / 100).toFixed(2).replace('.', ',')}`
 }
 
-function monthLabel(year: number | null, month: number | null) {
-  if (!year || !month) return '—'
-  return new Date(year, month - 1, 1).toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })
+function formatDate(value: string | Date | null | undefined) {
+  if (!value) return null
+  const d = typeof value === 'string' ? new Date(value) : value
+  return d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function coveredRange(settlement: Settlement) {
+  const dates = settlement.includedExpenses
+    .map((e) => (e.expenseDate ? new Date(e.expenseDate).getTime() : null))
+    .filter((t): t is number => t !== null)
+  if (dates.length === 0) return null
+  const from = new Date(Math.min(...dates))
+  const to = new Date(Math.max(...dates))
+  const fromLabel = from.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })
+  const toLabel = to.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })
+  return fromLabel === toLabel ? fromLabel : `${fromLabel} – ${toLabel}`
 }
 
 // ─── Transaction row ──────────────────────────────────────────────────────────
@@ -70,7 +83,7 @@ function TransactionRow({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function CurrentMonth() {
+export function ActiveSettlement() {
   const navigate = useNavigate()
   const userId = useAuthStore((s) => s.userId)!
   const household = useHouseholdStore((s) => s.household)
@@ -86,7 +99,7 @@ export function CurrentMonth() {
     // Load most recent open settlement
     settlements.list(household.id)
       .then((data) => {
-        const open = (data as any).settlements?.find((s: any) => s.status === 'open')
+        const open = data.settlements.find((s) => s.status === 'open')
         if (open) {
           return settlements.get(household.id, open.id).then((full) => {
             setCurrentSettlement(full)
@@ -108,11 +121,11 @@ export function CurrentMonth() {
       if (err?.status === 409) {
         const code = err?.code
         if (code === 'OPEN_SETTLEMENT_EXISTS') {
-          setError('An open settlement already exists for this period. Complete it first.')
+          setError('An open settlement already exists. Complete it first.')
         } else if (code === 'NO_EXPENSES') {
-          setError('No unsettled confirmed expenses for this period.')
+          setError('No unsettled confirmed expenses to settle.')
         } else {
-          setError('Settlement for this period already exists.')
+          setError('Could not trigger settlement.')
         }
       } else {
         setError(err?.message ?? 'Failed to trigger settlement.')
@@ -123,6 +136,8 @@ export function CurrentMonth() {
   }
 
   const allPaid = currentSettlement?.transactions.every((t) => !!t.paidAt) ?? false
+  const covered = currentSettlement ? coveredRange(currentSettlement) : null
+  const triggeredLabel = currentSettlement ? formatDate(currentSettlement.triggeredAt) : null
 
   return (
     <div className="settlement-page">
@@ -139,7 +154,7 @@ export function CurrentMonth() {
       {!loading && !currentSettlement && (
         <div className="no-settlement">
           <p className="no-settlement-text">
-            No open settlement. Trigger one to calculate last month's balances.
+            No open settlement. Trigger one to settle every confirmed receipt that has not been settled yet.
           </p>
           {isAdmin && (
             <button className="trigger-btn" disabled={triggering} onClick={handleTrigger}>
@@ -155,9 +170,14 @@ export function CurrentMonth() {
       {currentSettlement && (
         <>
           <div className="settlement-period">
-            {monthLabel(currentSettlement.periodYear, currentSettlement.periodMonth)}
-            {currentSettlement.status === 'completed' && (
-              <span className="completed-badge">Completed</span>
+            <div className="settlement-period-main">
+              {triggeredLabel ? `Triggered ${triggeredLabel}` : 'Settlement'}
+              {currentSettlement.status === 'completed' && (
+                <span className="completed-badge">Completed</span>
+              )}
+            </div>
+            {covered && (
+              <div className="settlement-period-sub">Covers {covered}</div>
             )}
           </div>
 
@@ -270,13 +290,21 @@ export function CurrentMonth() {
         .trigger-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .settlement-period {
           display: flex;
+          flex-direction: column;
+          gap: 0.2rem;
+          margin-bottom: 1.5rem;
+        }
+        .settlement-period-main {
+          display: flex;
           align-items: center;
           gap: 0.75rem;
           font-size: 0.95rem;
           font-weight: 500;
           color: #a1a1aa;
-          margin-bottom: 1.5rem;
-          text-transform: capitalize;
+        }
+        .settlement-period-sub {
+          font-size: 0.8rem;
+          color: #71717a;
         }
         .completed-badge {
           font-size: 0.7rem;

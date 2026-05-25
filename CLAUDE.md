@@ -17,6 +17,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 - **JWT auth**: 15min access token (Bearer) + 30-day rotating refresh token (httpOnly cookie)
 - **Monetary amounts**: all stored and computed as integers in øre (100 øre = 1 NOK). Non-integer amounts are rejected
 - **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
+- **Settlement scope**: snapshot-based (spec 003) — each settlement records the expenses included via `settlement_expenses`; not bound to a calendar month. Statistics still bucket expenses by `expense_date`.
 - **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
 - **Realtime sync**: WebSocket server in `backend/src/ws/server.ts`, household-scoped rooms
