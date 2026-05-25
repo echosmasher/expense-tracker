@@ -1,3 +1,4 @@
+import { config as loadEnv } from 'dotenv'
 import { readdir, readFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -5,6 +6,12 @@ import pg from 'pg'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const MIGRATIONS_DIR = join(__dirname, 'migrations')
+
+// Load .env from the project root (two levels up from src/db/) when not
+// already provided by the environment (e.g. Docker compose).
+if (!process.env.DATABASE_URL) {
+  loadEnv({ path: join(__dirname, '../../../.env') })
+}
 
 async function migrate() {
   const client = new pg.Client({ connectionString: process.env.DATABASE_URL })
