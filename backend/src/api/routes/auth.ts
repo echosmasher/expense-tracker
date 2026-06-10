@@ -122,7 +122,21 @@ router.post('/refresh', async (req, res, next) => {
     )
     const token = result.rows[0]
     if (!token) throw new AppError(401, 'INVALID_REFRESH_TOKEN', 'Invalid refresh token')
-    if (token.revoked_at) throw new AppError(401, 'INVALID_REFRESH_TOKEN', 'Refresh token revoked')
+
+    // Reuse detection (refresh-token rotation, RFC 9700): a token is revoked the
+    // moment it's rotated. A legitimate client discards it and presents only the
+    // new one — so seeing an already-revoked token again means two parties hold
+    // it (the token was stolen). Revoke every still-active token for this user to
+    // lock the attacker out; everyone re-authenticates. This is the safe outcome.
+    if (token.revoked_at) {
+      await db.query(
+        'UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL',
+        [token.user_id]
+      )
+      res.clearCookie('refresh_token', { path: '/api/v1/auth' })
+      throw new AppError(401, 'REFRESH_TOKEN_REUSED', 'Refresh token reuse detected; all sessions revoked')
+    }
+
     if (new Date() > token.expires_at) throw new AppError(401, 'REFRESH_TOKEN_EXPIRED', 'Refresh token expired')
 
     // Rotate: revoke old, issue new

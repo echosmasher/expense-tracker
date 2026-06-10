@@ -187,7 +187,7 @@ describe('access token validation', () => {
 // ─── Refresh rotation ─────────────────────────────────────────────────────────
 
 describe('refresh token rotation', () => {
-  it('rotates: refresh returns a new token and revokes the old one', async () => {
+  it('rotates: each refresh issues a new token and the chain keeps working', async () => {
     const login = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: admin.email, password: PASSWORD })
@@ -199,14 +199,32 @@ describe('refresh token rotation', () => {
     const secondCookie = refreshCookieOf(refresh1)
     expect(secondCookie).not.toBe(firstCookie)
 
-    // Replaying the pre-rotation token must fail — this is the property that
-    // limits the blast radius of a stolen refresh cookie.
-    const replay = await request(app).post('/api/v1/auth/refresh').set('Cookie', firstCookie)
-    expect(replay.status).toBe(401)
-
-    // The rotated token still works.
+    // The freshly rotated token works for the next refresh.
     const refresh2 = await request(app).post('/api/v1/auth/refresh').set('Cookie', secondCookie)
     expect(refresh2.status).toBe(200)
+    expect(refreshCookieOf(refresh2)).not.toBe(secondCookie)
+  })
+
+  it('reuse detection: replaying a rotated token revokes the entire chain', async () => {
+    const login = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: admin.email, password: PASSWORD })
+    const stolen = refreshCookieOf(login)
+
+    // Legitimate rotation: `stolen` is now revoked, `current` is live.
+    const rotate = await request(app).post('/api/v1/auth/refresh').set('Cookie', stolen)
+    expect(rotate.status).toBe(200)
+    const current = refreshCookieOf(rotate)
+
+    // Attacker replays the stolen (already-rotated) token → flagged as reuse.
+    const replay = await request(app).post('/api/v1/auth/refresh').set('Cookie', stolen)
+    expect(replay.status).toBe(401)
+    expect(replay.body.error.code).toBe('REFRESH_TOKEN_REUSED')
+
+    // Reuse detection revoked the whole family: even the legitimate live token
+    // is now dead, forcing a fresh login.
+    const afterReuse = await request(app).post('/api/v1/auth/refresh').set('Cookie', current)
+    expect(afterReuse.status).toBe(401)
   })
 
   it('rejects refresh without a cookie', async () => {
