@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
@@ -42,7 +43,10 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^20.14.0",
     "@types/pg": "^8.11.6",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.15.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   }
 }
