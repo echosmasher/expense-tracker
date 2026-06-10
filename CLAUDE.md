@@ -101,6 +101,16 @@ Copy `.env.example` → `.env` and fill in values before running.
 
 Required: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`
 
+## Security
+
+- `AUTHORIZATION.md` — the role × resource × operation matrix (the intended access-control
+  model; deviations are bugs). Rules marked ✓test are pinned by the backend test suites.
+- `THREAT-MODEL.md` — trust boundaries, assets, and the threat table with current mitigations
+  and residual risk.
+
+When adding a route, give it an entry in the matrix and a negative test in
+`backend/test/household-isolation.test.ts`.
+
 ## Financial Accuracy Rules (NON-NEGOTIABLE)
 
 1. All amounts are stored as integers in **øre** — never floats
