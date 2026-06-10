@@ -58,6 +58,16 @@ router.post('/', async (req, res, next) => {
       }
     }
 
+    // purchasedBy must be a member of this household — otherwise an expense could be
+    // attributed to a user from another household, corrupting settlement balances.
+    const purchaserCheck = await db.query(
+      'SELECT id FROM household_members WHERE household_id = $1 AND user_id = $2',
+      [householdId, body.purchasedBy]
+    )
+    if (purchaserCheck.rows.length === 0) {
+      throw new AppError(400, 'INVALID_PURCHASER', 'purchasedBy must be a member of this household')
+    }
+
     // Fetch household personal keywords for auto-tagging
     const keywordsResult = await db.query<{ keyword: string }>(
       'SELECT keyword FROM personal_keywords WHERE household_id = $1',
@@ -127,7 +137,7 @@ router.post('/', async (req, res, next) => {
       return expenseId
     })
 
-    const fullExpense = await getFullExpense(expense, userId)
+    const fullExpense = await getFullExpense(expense, householdId)
     res.status(201).json(fullExpense)
   } catch (err) {
     next(err)
@@ -200,7 +210,7 @@ router.get('/:expenseId', async (req, res, next) => {
     const userId = req.user!.userId
     await requireActiveMember(householdId, userId)
 
-    const expense = await getFullExpense(expenseId, userId)
+    const expense = await getFullExpense(expenseId, householdId)
     if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
 
     res.json(expense)
@@ -232,7 +242,7 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
       [expenseId]
     )
 
-    const updated = await getFullExpense(expenseId, userId)
+    const updated = await getFullExpense(expenseId, householdId)
     res.json(updated)
   } catch (err) {
     next(err)
@@ -330,7 +340,7 @@ export { lineItemRouter }
 
 // ─── Helper: fetch full expense with line items and signed receipt URL ────────
 
-async function getFullExpense(expenseId: string, _userId: string) {
+async function getFullExpense(expenseId: string, householdId: string) {
   const expResult = await db.query<{
     id: string
     household_id: string
@@ -346,8 +356,8 @@ async function getFullExpense(expenseId: string, _userId: string) {
   }>(
     `SELECT e.*, u.name as purchaser_name
      FROM expenses e JOIN users u ON u.id = e.purchased_by
-     WHERE e.id = $1`,
-    [expenseId]
+     WHERE e.id = $1 AND e.household_id = $2`,
+    [expenseId, householdId]
   )
   const expense = expResult.rows[0]
   if (!expense) return null

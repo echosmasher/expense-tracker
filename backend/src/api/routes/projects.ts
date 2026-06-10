@@ -92,6 +92,17 @@ router.post('/', async (req, res, next) => {
       throw new AppError(400, 'ALLOCATION_KEY_MUST_SUM_TO_10000', 'Allocation key must sum to 10000 basis points')
     }
 
+    // Every project member must belong to this household — otherwise an outsider
+    // could be pulled into the project's settlement math.
+    const uniqueMemberIds = [...new Set(body.memberIds)]
+    const memberRows = await db.query(
+      'SELECT user_id FROM household_members WHERE household_id = $1 AND user_id = ANY($2::uuid[])',
+      [householdId, uniqueMemberIds]
+    )
+    if (memberRows.rows.length !== uniqueMemberIds.length) {
+      throw new AppError(400, 'INVALID_MEMBERS', 'All project members must belong to this household')
+    }
+
     const projectId = await db.transaction(async (client) => {
       const pResult = await client.query<{ id: string }>(
         "INSERT INTO projects (household_id, name, description, status) VALUES ($1, $2, $3, 'active') RETURNING id",
@@ -208,6 +219,16 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       cardLastFour: z.string().optional(),
       lineItems: z.array(LineItemSchema).min(1),
     }).parse(req.body)
+
+    // purchasedBy must be a project member — otherwise the expense would credit
+    // someone outside the project when the settlement is calculated.
+    const purchaserCheck = await db.query(
+      'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, body.purchasedBy]
+    )
+    if (purchaserCheck.rows.length === 0) {
+      throw new AppError(400, 'INVALID_PURCHASER', 'purchasedBy must be a member of this project')
+    }
 
     // Exclude personal items — total_amount_ore is the project-billable amount
     const totalAmountOre = body.lineItems.reduce(
