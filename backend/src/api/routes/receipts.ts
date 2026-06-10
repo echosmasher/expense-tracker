@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
 import { parseReceipt } from '../../services/receiptParser.js'
+import { sanitizeImage } from '../../services/imageSanitizer.js'
 import { categorizeLineItems } from '../../services/categoryService.js'
 import { db } from '../../db/client.js'
 import { receiptParseLimiter } from '../middleware/rateLimit.js'
@@ -49,13 +50,16 @@ router.post('/parse', receiptParseLimiter, upload.single('receipt'), async (req,
       throw new AppError(403, 'FORBIDDEN', 'Not a member of this household')
     }
 
-    // Upload to MinIO
-    const ext = req.file.originalname.split('.').pop() ?? 'jpg'
-    const key = `receipts/${householdId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    await uploadFile(key, req.file.buffer, req.file.mimetype)
+    // Re-encode the upload to strip metadata (incl. GPS EXIF) and validate it's
+    // a real image before it touches storage or leaves the perimeter to OpenAI.
+    const image = await sanitizeImage(req.file.buffer)
 
-    // Parse receipt with Anthropic
-    const parsed = await parseReceipt(req.file.buffer, req.file.mimetype)
+    // Upload to MinIO
+    const key = `receipts/${householdId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${image.ext}`
+    await uploadFile(key, image.buffer, image.mimetype)
+
+    // Parse receipt with OpenAI
+    const parsed = await parseReceipt(image.buffer, image.mimetype)
 
     // Match detected card last four against household member cards
     let matchedCardLastFour: string | null = parsed.detectedCardLastFour

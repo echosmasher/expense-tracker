@@ -6,6 +6,7 @@ import { db } from '../../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
+import { sanitizeImage } from '../../services/imageSanitizer.js'
 
 const router = Router()
 const BCRYPT_ROUNDS = 12
@@ -135,9 +136,10 @@ router.post('/me/avatar', avatarUpload.single('avatar'), async (req, res, next) 
     const file = req.file
     if (!file) throw new AppError(400, 'NO_FILE', 'No avatar file provided')
 
-    const ext = file.mimetype.split('/')[1] ?? 'jpg'
-    const key = `avatars/${userId}/${Date.now()}.${ext}`
-    await uploadFile(key, file.buffer, file.mimetype)
+    // Strip metadata (incl. GPS EXIF) and validate the bytes are a real image.
+    const image = await sanitizeImage(file.buffer)
+    const key = `avatars/${userId}/${Date.now()}.${image.ext}`
+    await uploadFile(key, image.buffer, image.mimetype)
 
     await db.query('UPDATE users SET avatar_key = $1, updated_at = now() WHERE id = $2', [key, userId])
 
