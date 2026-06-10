@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
+import { ZodError } from 'zod'
 
 export class AppError extends Error {
   constructor(
@@ -19,6 +20,20 @@ export function errorHandler(
 ): void {
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: { code: err.code, message: err.message } })
+    return
+  }
+
+  // Routes validate bodies with Schema.parse(); a thrown ZodError is a client
+  // error, not a server fault — without this branch every malformed request
+  // body would surface as a 500.
+  if (err instanceof ZodError) {
+    res.status(400).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid request body',
+        details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      },
+    })
     return
   }
 
