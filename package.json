@@ -11,9 +11,10 @@
   "scripts": {
     "dev:backend": "npm run dev --workspace=backend",
     "dev:web": "npm run dev --workspace=web",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces",
-    "migrate": "npm run migrate --workspace=backend"
+    "migrate": "npm run migrate --workspace=backend",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",

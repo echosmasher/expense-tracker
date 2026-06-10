@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # backend and web resolve @expense-tracker/shared via its built dist/
+      - name: Build shared package
+        run: npm run build --workspace=shared
+
+      - name: Lint backend + shared (enforced)
+        run: npm run lint --workspace=backend --workspace=shared
+
+      # web + mobile carry pre-existing lint debt (no-explicit-any, unused vars).
+      # Keep them visible without blocking until the debt is burned down.
+      - name: Lint web + mobile (non-blocking)
+        run: npm run lint --workspace=web --workspace=mobile
+        continue-on-error: true
+
+      - name: Build all packages (includes typecheck)
+        run: npm run build
+
+      - name: Shared tests (settlement calculator)
+        run: npm test --workspace=shared
+
+      - name: Backend tests (auth + household isolation)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/expense_tracker_test
+        run: npm test --workspace=backend

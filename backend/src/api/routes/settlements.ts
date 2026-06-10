@@ -224,7 +224,6 @@ router.post('/', async (req, res, next) => {
       [householdId]
     )
     const periodLabel = `triggered ${new Date().toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}`
-    const memberMap = new Map(membersResult.rows.map((m) => [m.email, m.name]))
     // fetch user names by id for the email
     const userIds = [...new Set(transactions.flatMap((t) => [t.fromUserId, t.toUserId]))]
     const userRows = userIds.length > 0
@@ -333,7 +332,7 @@ settlementTransactionRouter.patch('/:transactionId', async (req, res, next) => {
     const { settlementId, transactionId } = req.params as { settlementId: string; transactionId: string }
     const userId = req.user!.userId
 
-    const body = z.object({ paid: z.literal(true) }).parse(req.body)
+    z.object({ paid: z.literal(true) }).parse(req.body)
 
     // Get settlement + verify membership
     const settlementResult = await db.query<{ household_id: string | null; status: string }>(
