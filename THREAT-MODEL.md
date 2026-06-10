@@ -44,9 +44,9 @@ third-party API keys.
 | T2 | **Credential theft / brute force** | bcrypt-12, rate limit 20/15min, identical error for bad-password vs unknown-email | No account lockout or 2FA; limiter is in-memory (per-process, resets on restart, not shared across replicas) |
 | T3 | **Session/token abuse** | 15-min access token; refresh rotates on use and old token is revoked; **reuse detection**: replaying a rotated token revokes the whole token family (tested); httpOnly + SameSite=Strict defeats CSRF & JS theft | Access token not revocable within its 15-min window |
 | T4 | **Money tampering** | Integer-øre only (floats → 400), basis-point shares sum-checked, `purchasedBy` membership-validated; settlement calc covered by example **and property-based tests** (sum-to-zero, integer-only, remainder-to-admin, ≤N−1 transactions) | Low — financial core is now well-pinned |
-| T5 | **Malicious upload** | multer 2.x, 10 MB cap, MIME allow-list, memory storage; images keyed under `receipts/:householdId/` | No content re-validation/transcoding; MIME is client-asserted; image bytes are sent to OpenAI |
+| T5 | **Malicious upload** | multer 2.x, 10 MB cap, MIME allow-list, memory storage; images keyed under `receipts/:householdId/`; **every upload re-encoded server-side via sharp — validates it's a real image, strips all metadata incl. GPS EXIF, caps dimensions** (tested) | Re-encoded bytes still sent to OpenAI for receipts (inherent to the feature) |
 | T6 | **Injection** | Exclusively parameterized `pg` queries; dynamic statistics filters use positional params, never interpolation; CSV export quotes fields **and prefixes formula-trigger cells (`= + - @`) with `'`** (tested) | SQL surface is clean today |
-| T7 | **Secret exposure** | Secrets in `.env` (gitignored), validated at boot, rejected if placeholder; logger redacts `password`/`token`/`authorization` | Secrets are plaintext on the host; no rotation procedure; receipt data egresses to OpenAI |
+| T7 | **Secret exposure** | Secrets in `.env` (gitignored), validated at boot, rejected if placeholder; logger redacts `password`/`token`/`authorization`; **documented rotation runbook with blast-radius per secret** (DEPLOYMENT.md) | Secrets still plaintext on the host (acceptable for a single trusted host); receipt data egresses to OpenAI |
 | T8 | **Invite abuse** | Tokens are random 32-byte, sha256-hashed, 7-day expiry, single-use, bound to the invited email | A leaked unexpired token is usable by anyone until it's accepted (then closed) |
 | T9 | **Supply chain** | `npm ci` from committed lockfile; `npm audit --omit=dev` gates backend/shared/web in CI | Expo/RN toolchain in `mobile/` carries unpatched advisories (needs SDK upgrade); no SBOM/pinned digests |
 | T10 | **DoS** | Per-IP rate limits on auth and receipt-parse; 1 MB JSON body cap | No global request quota; a valid member can issue unbounded normal API calls |
@@ -59,15 +59,18 @@ own household; nation-state adversaries.
 
 ## Next hardening
 
-Done since the top-5: **T3** refresh-reuse detection (revoke the family on replay),
-**T6** CSV formula-injection escaping, **T4** property-based settlement tests.
+Done since the top-5: **T3** refresh-reuse detection, **T4** property-based settlement
+tests, **T6** CSV formula-injection escaping, **T5** server-side image re-encode + metadata
+strip, **T7** secret-rotation runbook.
 
-Remaining, lower priority:
-- **T2**: a shared-store rate limiter and account lockout would need Redis or a DB-backed
-  counter. Deliberately deferred — the in-memory per-process limiter is adequate for a
-  single-instance deployment, and adding Redis is operational weight this scale doesn't justify.
-  Revisit if the API is ever run multi-replica.
-- **T5**: re-encode/transcode uploaded images server-side instead of trusting the client MIME
-  type; consider stripping EXIF before sending to OpenAI.
-- **T7**: a secret-rotation procedure and moving secrets off plaintext `.env` (e.g. a secrets
-  manager) if the deployment grows beyond a hobby host.
+Remaining — each deliberately deferred, not forgotten:
+- **T2**: a shared-store rate limiter / account lockout needs Redis or a DB-backed counter.
+  The in-memory per-process limiter is adequate for a single-instance deployment, and account
+  lockout introduces its own DoS vector (an attacker can lock out a victim by failing their
+  logins). Revisit only if the API is ever run multi-replica.
+- **T7 (secrets manager)**: moving secrets off plaintext `.env` to Vault/Doppler/KMS is only
+  worth the operational weight beyond a single trusted host. The rotation runbook covers the
+  realistic risk for this deployment.
+- **T9 (mobile toolchain)**: the remaining `npm audit` advisories are all in the Expo SDK 51 /
+  RN 0.74 dependency tree. Clearing them is a major Expo SDK upgrade that must be validated on
+  iOS hardware — out of scope for an automated change.

@@ -182,6 +182,32 @@ For a richer Postgres backup, prefer `pg_dump` over a raw volume tarball — sur
 docker compose exec db pg_dump -U "$POSTGRES_USER" expense_tracker | gzip > backups/db-$(date +%Y%m%d).sql.gz
 ```
 
+## Step 10.5 — Rotating secrets
+
+Rotate on a schedule (e.g. yearly) and immediately on any suspected exposure
+(a leaked `.env`, a departed housemate, a compromised laptop). All secrets live
+in `.env` on the host; the app validates them at boot and refuses to start on a
+placeholder. After editing `.env`, apply with `docker compose up -d` (recreates
+the `api` container with the new environment) unless noted otherwise.
+
+| Secret | How to rotate | Blast radius when you rotate |
+|--------|---------------|------------------------------|
+| `JWT_ACCESS_SECRET` | `openssl rand -hex 64` → replace → `docker compose up -d api` | All **access** tokens become invalid immediately. Users don't notice: the browser silently fetches a new one via `/auth/refresh` (refresh tokens are stored in Postgres, not signed by this secret, so sessions survive). |
+| `POSTGRES_PASSWORD` | Change the role password **first**, then update `.env` (the `DATABASE_URL` embeds it), then restart: <br>`docker compose exec db psql -U "$POSTGRES_USER" -c "ALTER USER \"$POSTGRES_USER\" PASSWORD 'new';"` <br>then edit `.env` → `docker compose up -d` | Brief: the API can't reach the DB between the `ALTER` and the restart. Do them back-to-back. |
+| `MINIO_SECRET_KEY` / `MINIO_ACCESS_KEY` | Rotate the key in MinIO (console or `mc admin user svcacct`), update `.env`, `docker compose up -d` | Previously issued signed receipt URLs (1h TTL) keep working until they expire; new ones use the new key. |
+| `OPENAI_API_KEY` | Revoke + recreate at platform.openai.com, update `.env`, `docker compose up -d api` | Receipt parsing fails until the new key is live — it degrades gracefully (empty items, hand-entry still works), so no data loss. |
+| `RESEND_API_KEY` | Revoke + recreate at resend.com, update `.env`, `docker compose up -d api` | Invite + settlement emails fail to send until the new key is live. In-app flows are unaffected. |
+
+Notes:
+- **Forcing logout everywhere**: rotating `JWT_ACCESS_SECRET` does *not* end sessions
+  (refresh re-mints tokens). To actually log everyone out, also revoke refresh tokens:
+  `docker compose exec db psql -U "$POSTGRES_USER" expense_tracker -c "UPDATE refresh_tokens SET revoked_at = now() WHERE revoked_at IS NULL;"`
+- Keep the **old** `.env` until the new one is confirmed working, then shred it
+  (`shred -u`), and rotate any secret that was ever committed or shared in plaintext.
+- This deployment keeps secrets in a plaintext `.env`, which is appropriate for a
+  single trusted host. A secrets manager (Vault, Doppler, cloud KMS) is only worth
+  the operational weight if you outgrow that. See `THREAT-MODEL.md` (T7).
+
 ## Step 11 — Updates
 
 ```bash

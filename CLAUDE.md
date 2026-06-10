@@ -19,6 +19,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 - **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
 - **Settlement scope**: snapshot-based (spec 003) — each settlement records the expenses included via `settlement_expenses`; not bound to a calendar month. Statistics still bucket expenses by `expense_date`.
 - **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
+- **Image uploads**: every receipt/avatar is re-encoded via `sharp` (`backend/src/services/imageSanitizer.ts`) to strip metadata (incl. GPS EXIF), validate it's a real image, and cap dimensions — before storage or egress to OpenAI
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
 
 ## Project Structure
@@ -34,7 +35,7 @@ backend/src/
     client.ts      typed pg wrapper
     migrate.ts     migration runner
     migrations/    001_create_all_tables.sql, 002_create_indexes.sql
-  services/        email.ts, receiptParser.ts, tagMatcher.ts, categorizer.ts, categoryService.ts
+  services/        email.ts, receiptParser.ts, imageSanitizer.ts, tagMatcher.ts, categorizer.ts, categoryService.ts
   storage/         minio.ts
 backend/test/      Vitest + Supertest integration tests (household isolation suite)
 
