@@ -111,7 +111,6 @@ export function ExpenseList() {
       ))}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
 
         .expense-list-page {
           max-width: 720px;

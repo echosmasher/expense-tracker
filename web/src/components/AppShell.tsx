@@ -1,18 +1,29 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import {
+  Receipt,
+  Plus,
+  Scale,
+  FolderKanban,
+  BarChart3,
+  Users,
+  Tag,
+  HousePlus,
+  type LucideIcon,
+} from 'lucide-react'
 import { households } from '@expense-tracker/shared'
 import { useAuthStore } from '../stores/authStore'
 import { useHouseholdStore } from '../stores/householdStore'
 
-const NAV_ITEMS = [
-  { to: '/expenses', label: 'Expenses', icon: '📋' },
-  { to: '/expenses/new', label: 'Add Expense', icon: '＋' },
-  { to: '/settlement', label: 'Settlement', icon: '⚖' },
-  { to: '/projects', label: 'Projects', icon: '📁' },
-  { to: '/statistics', label: 'Statistics', icon: '📊' },
-  { to: '/settings/members', label: 'Household', icon: '👥' },
-  { to: '/settings/categories', label: 'Categories', icon: '🏷' },
-  { to: '/create-household', label: 'Register Household', icon: '🏠' },
+const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
+  { to: '/expenses', label: 'Expenses', icon: Receipt },
+  { to: '/expenses/new', label: 'Add Expense', icon: Plus },
+  { to: '/settlement', label: 'Settlement', icon: Scale },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/statistics', label: 'Statistics', icon: BarChart3 },
+  { to: '/settings/members', label: 'Household', icon: Users },
+  { to: '/settings/categories', label: 'Categories', icon: Tag },
+  { to: '/create-household', label: 'Register Household', icon: HousePlus },
 ]
 
 export function AppShell() {
@@ -62,7 +73,7 @@ export function AppShell() {
                 `nav-item ${isActive ? 'nav-item--active' : ''}`
               }
             >
-              <span className="nav-icon">{item.icon}</span>
+              <item.icon className="nav-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
               <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
@@ -83,7 +94,6 @@ export function AppShell() {
       </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
 
         .app-shell {
           display: flex;
@@ -156,12 +166,16 @@ export function AppShell() {
         }
 
         .nav-icon {
-          width: 20px;
-          text-align: center;
-          font-size: 0.9rem;
-          opacity: 0.7;
+          width: 18px;
+          height: 18px;
+          opacity: 0.65;
           flex-shrink: 0;
+          transition: opacity 0.12s;
+          /* lucide SVGs inherit currentColor, so they track the nav-item color
+             on hover/active for free. */
         }
+
+        .nav-item:hover .nav-icon { opacity: 0.85; }
 
         .nav-label {
           white-space: nowrap;

@@ -17,7 +17,6 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap');
 
         .auth-shell {
           min-height: 100dvh;
