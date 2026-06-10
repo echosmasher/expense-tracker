@@ -32,15 +32,15 @@ export function Button({ variant = 'primary', loading, children, disabled, ...pr
         .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
         .btn-primary {
-          background: #6366f1;
+          background: var(--accent);
           color: #fff;
         }
-        .btn-primary:hover:not(:disabled) { background: #4f46e5; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
         .btn-ghost {
-          background: #27272a;
-          color: #a1a1aa;
+          background: var(--badge-bg);
+          color: var(--text-secondary);
         }
-        .btn-ghost:hover:not(:disabled) { background: #3f3f46; color: #f4f4f5; }
+        .btn-ghost:hover:not(:disabled) { background: var(--border-input); color: var(--text-primary); }
       `}</style>
     </>
   )

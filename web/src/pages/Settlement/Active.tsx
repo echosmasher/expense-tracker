@@ -237,7 +237,7 @@ export function ActiveSettlement() {
           margin: 0 auto;
           padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .settlement-header {
           display: flex;
@@ -254,27 +254,27 @@ export function ActiveSettlement() {
         .history-link {
           background: none;
           border: none;
-          color: #818cf8;
+          color: var(--accent-light);
           font-size: 0.875rem;
           cursor: pointer;
           padding: 0;
           font-family: inherit;
         }
         .settlement-loading, .settlement-error {
-          color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0;
+          color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0;
         }
-        .settlement-error { color: #f87171; }
+        .settlement-error { color: var(--danger); }
         .no-settlement {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 14px;
           padding: 2rem 1.5rem;
           text-align: center;
         }
-        .no-settlement-text { color: #71717a; font-size: 0.9rem; margin: 0 0 1.25rem; line-height: 1.5; }
-        .no-settlement-hint { color: #52525b; font-size: 0.8rem; margin: 0.75rem 0 0; }
+        .no-settlement-text { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 1.25rem; line-height: 1.5; }
+        .no-settlement-hint { color: var(--text-faint); font-size: 0.8rem; margin: 0.75rem 0 0; }
         .trigger-btn {
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 10px;
           color: #fff;
@@ -285,7 +285,7 @@ export function ActiveSettlement() {
           font-family: inherit;
           transition: background 0.15s, opacity 0.15s;
         }
-        .trigger-btn:hover { background: #4f46e5; }
+        .trigger-btn:hover { background: var(--accent-hover); }
         .trigger-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .settlement-period {
           display: flex;
@@ -299,11 +299,11 @@ export function ActiveSettlement() {
           gap: 0.75rem;
           font-size: 0.95rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
         }
         .settlement-period-sub {
           font-size: 0.8rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .completed-badge {
           font-size: 0.7rem;
@@ -311,9 +311,9 @@ export function ActiveSettlement() {
           text-transform: uppercase;
           letter-spacing: 0.04em;
           padding: 0.2rem 0.5rem;
-          background: #27272a;
-          border: 1px solid #3f3f46;
-          color: #71717a;
+          background: var(--badge-bg);
+          border: 1px solid var(--border-input);
+          color: var(--text-muted);
           border-radius: 6px;
         }
         .settlement-section { margin-bottom: 1.5rem; }
@@ -322,12 +322,12 @@ export function ActiveSettlement() {
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: #71717a;
+          color: var(--text-muted);
           margin: 0 0 0.625rem 0.25rem;
         }
         .balances-list {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           overflow: hidden;
         }
@@ -336,15 +336,15 @@ export function ActiveSettlement() {
           align-items: center;
           gap: 0.75rem;
           padding: 0.875rem 1rem;
-          border-bottom: 1px solid #1f1f22;
+          border-bottom: 1px solid var(--border-subtle);
         }
         .balance-row:last-child { border-bottom: none; }
         .balance-avatar {
           width: 30px; height: 30px;
-          background: #27272a;
+          background: var(--badge-bg);
           border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.8rem; font-weight: 600; color: #a1a1aa;
+          font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);
           flex-shrink: 0;
         }
         .balance-name { flex: 1; font-size: 0.875rem; color: #e4e4e7; }
@@ -352,18 +352,18 @@ export function ActiveSettlement() {
           font-family: 'DM Mono', monospace;
           font-size: 0.875rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
         }
-        .balance-amount--credit { color: #4ade80; }
-        .balance-amount--debit { color: #f87171; }
+        .balance-amount--credit { color: var(--success); }
+        .balance-amount--debit { color: var(--danger); }
         .tx-list {
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
         }
         .tx-row {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           padding: 0.875rem 1rem;
           display: flex;
@@ -378,12 +378,12 @@ export function ActiveSettlement() {
           justify-content: space-between;
           gap: 0.5rem;
         }
-        .tx-label { font-size: 0.875rem; color: #a1a1aa; }
-        .tx-you { color: #f4f4f5; }
+        .tx-label { font-size: 0.875rem; color: var(--text-secondary); }
+        .tx-you { color: var(--text-primary); }
         .tx-amount {
           font-family: 'DM Mono', monospace;
           font-size: 0.9rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-weight: 500;
         }
         .tx-mark-btn {
@@ -391,7 +391,7 @@ export function ActiveSettlement() {
           background: rgba(99,102,241,0.1);
           border: 1px solid rgba(99,102,241,0.25);
           border-radius: 8px;
-          color: #818cf8;
+          color: var(--accent-light);
           font-size: 0.85rem;
           font-weight: 500;
           padding: 0.45rem;
@@ -403,24 +403,24 @@ export function ActiveSettlement() {
         .tx-mark-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .tx-paid-badge {
           font-size: 0.78rem;
-          color: #4ade80;
+          color: var(--success);
           font-weight: 500;
         }
-        .no-tx { color: #52525b; font-size: 0.875rem; margin: 0; text-align: center; padding: 1.5rem; }
+        .no-tx { color: var(--text-faint); font-size: 0.875rem; margin: 0; text-align: center; padding: 1.5rem; }
         .all-paid-banner, .completed-banner {
           background: rgba(34,197,94,0.08);
           border: 1px solid rgba(34,197,94,0.2);
           border-radius: 10px;
-          color: #4ade80;
+          color: var(--success);
           font-size: 0.875rem;
           font-weight: 500;
           padding: 0.75rem 1rem;
           text-align: center;
         }
         .completed-banner {
-          background: #18181b;
-          border-color: #27272a;
-          color: #71717a;
+          background: var(--bg-card);
+          border-color: var(--border);
+          color: var(--text-muted);
         }
       `}</style>
     </div>

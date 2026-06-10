@@ -78,7 +78,7 @@ export function AcceptInvite() {
   if (invite.status === 'loading') {
     return (
       <AuthShell>
-        <div style={{ textAlign: 'center', color: '#71717a', padding: '2rem 0' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0' }}>
           Checking your invite…
         </div>
       </AuthShell>
@@ -96,8 +96,8 @@ export function AcceptInvite() {
         <style>{`
           .invite-error-box { text-align: center; padding: 1rem 0; }
           .invite-error-icon { font-size: 2rem; margin: 0 0 0.75rem; }
-          .invite-error-msg { color: #f4f4f5; font-weight: 500; margin: 0 0 0.5rem; }
-          .invite-error-hint { color: #71717a; font-size: 0.875rem; margin: 0; }
+          .invite-error-msg { color: var(--text-primary); font-weight: 500; margin: 0 0 0.5rem; }
+          .invite-error-hint { color: var(--text-muted); font-size: 0.875rem; margin: 0; }
         `}</style>
       </AuthShell>
     )
@@ -107,7 +107,7 @@ export function AcceptInvite() {
     <AuthShell>
       <p className="invite-headline">
         You've been invited to join{' '}
-        <strong style={{ color: '#f4f4f5' }}>{invite.householdName}</strong>.
+        <strong style={{ color: 'var(--text-primary)' }}>{invite.householdName}</strong>.
       </p>
 
       <form onSubmit={handleAccept} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -142,7 +142,7 @@ export function AcceptInvite() {
           />
         </FormField>
 
-        {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+        {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
 
         <Button type="submit" loading={loading} style={{ marginTop: '0.5rem' }}>
           {invite.status === 'new-user' ? 'Join household' : 'Sign in & join'}
@@ -152,7 +152,7 @@ export function AcceptInvite() {
       <style>{`
         .invite-headline {
           font-size: 0.9rem;
-          color: #71717a;
+          color: var(--text-muted);
           margin: -1rem 0 1.5rem;
           line-height: 1.5;
         }

@@ -7,7 +7,7 @@ import { statistics } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useStatsStore } from '../../stores/statsStore'
 
-const COLOURS = ['#6366f1', '#4ade80', '#f59e0b', '#f87171', '#818cf8', '#34d399', '#fb923c', '#a5b4fc']
+const COLOURS = ['#6366f1', '#4ade80', '#f59e0b', 'var(--danger)', 'var(--accent-light)', '#34d399', '#fb923c', '#a5b4fc']
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(0)}`
@@ -127,15 +127,15 @@ export function CategoryTrends() {
             <div className="trends-chart">
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis
                     dataKey="month"
-                    tick={{ fill: '#71717a', fontSize: 11 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                     tickLine={false}
-                    axisLine={{ stroke: '#27272a' }}
+                    axisLine={{ stroke: 'var(--border)' }}
                   />
                   <YAxis
-                    tick={{ fill: '#71717a', fontSize: 11 }}
+                    tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `${Math.round(v / 100)}`}
@@ -143,7 +143,7 @@ export function CategoryTrends() {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend
                     iconType="circle" iconSize={7}
-                    formatter={(value) => <span style={{ color: '#a1a1aa', fontSize: '0.78rem' }}>{value}</span>}
+                    formatter={(value) => <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{value}</span>}
                   />
                   {activeLabels.map((label, idx) => (
                     <Line
@@ -199,30 +199,30 @@ export function CategoryTrends() {
       )}
 
       <style>{`
-        .trends-page { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
+        .trends-page { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; font-family: 'Geist', sans-serif; color: var(--text-primary); }
         .trends-topbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-        .back-btn { background: none; border: none; color: #818cf8; font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; white-space: nowrap; }
+        .back-btn { background: none; border: none; color: var(--accent-light); font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; white-space: nowrap; }
         .trends-title { font-size: 1.25rem; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
-        .trends-msg { color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
-        .trends-msg--error { color: #f87171; }
+        .trends-msg { color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
+        .trends-msg--error { color: var(--danger); }
         .tag-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
-        .tag-chip { background: #18181b; border: 1px solid #27272a; border-radius: 20px; color: #71717a; font-size: 0.8rem; padding: 0.3rem 0.75rem; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s, background 0.15s; }
-        .tag-chip--active { background: rgba(99,102,241,0.12); border-color: #6366f1; color: #818cf8; }
-        .trends-empty { color: #52525b; font-size: 0.875rem; text-align: center; padding: 2rem 0; line-height: 1.5; }
-        .trends-chart { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 1rem 0.5rem; margin-bottom: 1.5rem; }
-        .chart-tooltip { background: #27272a; border: 1px solid #3f3f46; border-radius: 8px; padding: 0.5rem 0.75rem; }
-        .ct-month { font-size: 0.75rem; color: #71717a; margin: 0 0 4px; }
+        .tag-chip { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; color: var(--text-muted); font-size: 0.8rem; padding: 0.3rem 0.75rem; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s, background 0.15s; }
+        .tag-chip--active { background: rgba(99,102,241,0.12); border-color: var(--accent); color: var(--accent-light); }
+        .trends-empty { color: var(--text-faint); font-size: 0.875rem; text-align: center; padding: 2rem 0; line-height: 1.5; }
+        .trends-chart { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 0.5rem; margin-bottom: 1.5rem; }
+        .chart-tooltip { background: var(--badge-bg); border: 1px solid var(--border-input); border-radius: 8px; padding: 0.5rem 0.75rem; }
+        .ct-month { font-size: 0.75rem; color: var(--text-muted); margin: 0 0 4px; }
         .ct-line { font-family: 'DM Mono', monospace; font-size: 0.8rem; margin: 0; }
         .trends-table-section { }
-        .trends-section-title { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: #71717a; margin: 0 0 0.625rem 0.25rem; }
-        .trends-table { background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; }
-        .trends-table-row { padding: 0.75rem 1rem; border-bottom: 1px solid #1f1f22; }
+        .trends-section-title { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 0.625rem 0.25rem; }
+        .trends-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .trends-table-row { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle); }
         .trends-table-row:last-child { border-bottom: none; }
-        .tt-month { font-size: 0.8rem; font-weight: 500; color: #a1a1aa; display: block; margin-bottom: 0.4rem; text-transform: capitalize; }
+        .tt-month { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: 0.4rem; text-transform: capitalize; }
         .tt-tags { display: flex; flex-direction: column; gap: 3px; }
         .tt-tag-row { display: flex; justify-content: space-between; }
-        .tt-tag-name { font-size: 0.8rem; color: #71717a; }
-        .tt-tag-amount { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: #f4f4f5; }
+        .tt-tag-name { font-size: 0.8rem; color: var(--text-muted); }
+        .tt-tag-amount { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text-primary); }
       `}</style>
     </div>
   )

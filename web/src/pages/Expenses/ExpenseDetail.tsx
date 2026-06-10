@@ -347,22 +347,22 @@ export function ExpenseDetail() {
           margin: 0 auto;
           padding: 1.25rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .detail-topbar { margin-bottom: 1.25rem; }
         .back-btn {
           background: none;
           border: none;
-          color: #818cf8;
+          color: var(--accent-light);
           font-size: 0.9rem;
           cursor: pointer;
           padding: 0;
           font-family: inherit;
         }
         .detail-loading, .detail-error {
-          color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0;
+          color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0;
         }
-        .detail-error { color: #f87171; }
+        .detail-error { color: var(--danger); }
         .detail-head { margin-bottom: 1.25rem; }
         .detail-store {
           font-size: 1.375rem;
@@ -370,18 +370,18 @@ export function ExpenseDetail() {
           margin: 0 0 0.3rem;
           letter-spacing: -0.025em;
         }
-        .detail-meta { color: #71717a; font-size: 0.85rem; margin: 0 0 0.75rem; }
+        .detail-meta { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 0.75rem; }
         .detail-total {
           font-family: 'DM Mono', monospace;
           font-size: 1.75rem;
           font-weight: 500;
-          color: #f4f4f5;
+          color: var(--text-primary);
           letter-spacing: -0.02em;
         }
         .detail-receipt-img {
           width: 100%;
           border-radius: 12px;
-          border: 1px solid #27272a;
+          border: 1px solid var(--border);
           margin-bottom: 1.5rem;
           max-height: 220px;
           object-fit: cover;
@@ -393,15 +393,15 @@ export function ExpenseDetail() {
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: #71717a;
+          color: var(--text-muted);
           margin: 0 0 0.625rem 0.25rem;
         }
         .line-items {
           list-style: none;
           margin: 0;
           padding: 0;
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           overflow: hidden;
         }
@@ -410,7 +410,7 @@ export function ExpenseDetail() {
           justify-content: space-between;
           align-items: flex-start;
           padding: 0.75rem 1rem;
-          border-bottom: 1px solid #1f1f22;
+          border-bottom: 1px solid var(--border-subtle);
           gap: 0.75rem;
         }
         .line-item:last-child { border-bottom: none; }
@@ -418,12 +418,12 @@ export function ExpenseDetail() {
         .line-item-left { display: flex; flex-direction: column; gap: 3px; flex: 1; }
         .line-item-meta-row { display: flex; align-items: center; gap: 0.5rem; }
         .line-item-desc { font-size: 0.875rem; color: #e4e4e7; }
-        .line-item-qty { font-size: 0.75rem; color: #71717a; }
+        .line-item-qty { font-size: 0.75rem; color: var(--text-muted); }
         .line-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
         .line-item-price {
           font-family: 'DM Mono', monospace;
           font-size: 0.875rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .personal-tag {
           font-size: 0.68rem;
@@ -437,8 +437,8 @@ export function ExpenseDetail() {
           font-weight: 500;
         }
         .breakdown {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           overflow: hidden;
         }
@@ -447,31 +447,31 @@ export function ExpenseDetail() {
           justify-content: space-between;
           padding: 0.75rem 1rem;
           font-size: 0.875rem;
-          color: #a1a1aa;
-          border-bottom: 1px solid #1f1f22;
+          color: var(--text-secondary);
+          border-bottom: 1px solid var(--border-subtle);
         }
         .breakdown-row:last-child { border-bottom: none; }
-        .breakdown-row--personal { color: #71717a; }
+        .breakdown-row--personal { color: var(--text-muted); }
         .breakdown-amount {
           font-family: 'DM Mono', monospace;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .detail-action {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 14px;
           padding: 1.25rem;
           margin-top: 0.5rem;
         }
         .detail-action-hint {
           font-size: 0.85rem;
-          color: #71717a;
+          color: var(--text-muted);
           margin: 0 0 1rem;
           line-height: 1.5;
         }
         .confirm-btn {
           width: 100%;
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 10px;
           color: #fff;
@@ -482,13 +482,13 @@ export function ExpenseDetail() {
           font-family: inherit;
           transition: background 0.15s, opacity 0.15s;
         }
-        .confirm-btn:hover { background: #4f46e5; }
+        .confirm-btn:hover { background: var(--accent-hover); }
         .confirm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .detail-confirmed-banner, .detail-settled-banner {
           background: rgba(34,197,94,0.08);
           border: 1px solid rgba(34,197,94,0.2);
           border-radius: 10px;
-          color: #4ade80;
+          color: var(--success);
           font-size: 0.875rem;
           font-weight: 500;
           padding: 0.75rem 1rem;
@@ -496,20 +496,20 @@ export function ExpenseDetail() {
           margin-top: 0.5rem;
         }
         .detail-settled-banner {
-          background: #27272a;
-          border-color: #3f3f46;
-          color: #71717a;
+          background: var(--badge-bg);
+          border-color: var(--border-input);
+          color: var(--text-muted);
         }
 
         .line-item-price--editable {
           background: none;
           border: none;
-          border-bottom: 1px dashed #3f3f46;
+          border-bottom: 1px dashed var(--border-input);
           cursor: pointer;
           padding: 0 0 1px;
           transition: border-color 0.15s;
         }
-        .line-item-price--editable:hover { border-color: #6366f1; }
+        .line-item-price--editable:hover { border-color: var(--accent); }
         .editable-price-row {
           display: flex;
           align-items: center;
@@ -517,14 +517,14 @@ export function ExpenseDetail() {
         }
         .editable-price-prefix {
           font-size: 0.75rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .editable-price-input {
           width: 72px;
-          background: #09090b;
-          border: 1px solid #6366f1;
+          background: var(--bg-base);
+          border: 1px solid var(--accent);
           border-radius: 6px;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-family: 'DM Mono', monospace;
           font-size: 0.85rem;
           padding: 0.15rem 0.35rem;
@@ -533,7 +533,7 @@ export function ExpenseDetail() {
         }
         .editable-price-qty {
           font-size: 0.72rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .dcat-badge {
           display: inline-block;
@@ -542,18 +542,18 @@ export function ExpenseDetail() {
           font-size: 0.68rem;
           font-weight: 500;
           font-family: inherit;
-          border: 1px solid #3f3f46;
-          background: #27272a;
-          color: #a1a1aa;
+          border: 1px solid var(--border-input);
+          background: var(--badge-bg);
+          color: var(--text-secondary);
           cursor: pointer;
           white-space: nowrap;
           transition: border-color 0.15s;
         }
-        .dcat-badge:hover { border-color: #6366f1; }
+        .dcat-badge:hover { border-color: var(--accent); }
         .dcat-badge--uncat {
           border-color: #92400e;
           background: rgba(146,64,14,0.15);
-          color: #fbbf24;
+          color: var(--warning);
         }
         .dcat-dropdown {
           position: absolute;
@@ -563,8 +563,8 @@ export function ExpenseDetail() {
           min-width: 170px;
           max-height: 200px;
           overflow-y: auto;
-          background: #18181b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-card);
+          border: 1px solid var(--border-input);
           border-radius: 10px;
           padding: 0.25rem;
           display: flex;
@@ -582,23 +582,23 @@ export function ExpenseDetail() {
           border-radius: 6px;
           transition: background 0.1s;
         }
-        .dcat-option:hover { background: #27272a; }
-        .dcat-option--new { color: #818cf8; }
+        .dcat-option:hover { background: var(--badge-bg); }
+        .dcat-option--new { color: var(--accent-light); }
         .dcat-new-row { display: flex; gap: 0.3rem; padding: 0.25rem 0.35rem; }
         .dcat-new-input {
           flex: 1;
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-base);
+          border: 1px solid var(--border-input);
           border-radius: 6px;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.78rem;
           font-family: inherit;
           padding: 0.2rem 0.35rem;
           outline: none;
         }
-        .dcat-new-input:focus { border-color: #6366f1; }
+        .dcat-new-input:focus { border-color: var(--accent); }
         .dcat-new-btn {
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 6px;
           color: #fff;

@@ -66,7 +66,7 @@ function AddCardModal({ onClose, onAdded }: { onClose: () => void; onAdded: () =
               onChange={(e) => setLabel(e.target.value)}
             />
           </FormField>
-          {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+          {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
           <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
             <Button type="button" variant="ghost" onClick={onClose} style={{ flex: 1 }}>
               Cancel
@@ -116,8 +116,8 @@ function InviteModal({ householdId, onClose }: { householdId: string; onClose: (
           <>
             <p className="invite-sent-icon">✓</p>
             <h3 className="modal-title">Invite sent!</h3>
-            <p style={{ color: '#71717a', fontSize: '0.875rem', textAlign: 'center', margin: '0 0 1.5rem' }}>
-              We've sent an invite to <strong style={{ color: '#f4f4f5' }}>{email}</strong>.
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', textAlign: 'center', margin: '0 0 1.5rem' }}>
+              We've sent an invite to <strong style={{ color: 'var(--text-primary)' }}>{email}</strong>.
             </p>
             <Button onClick={onClose}>Done</Button>
           </>
@@ -134,7 +134,7 @@ function InviteModal({ householdId, onClose }: { householdId: string; onClose: (
                   autoFocus
                 />
               </FormField>
-              {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+              {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <Button type="button" variant="ghost" onClick={onClose} style={{ flex: 1 }}>
                   Cancel
@@ -221,18 +221,18 @@ function AllocationKeyEditor({ household, onSaved }: { household: Household; onS
       {error && <p className="alloc-editor-error">{error}</p>}
       {saved && !error && <p className="alloc-editor-saved">Saved.</p>}
       <style>{`
-        .alloc-editor-hint { font-size: 0.78rem; color: #71717a; margin: 0 0 0.75rem; line-height: 1.5; }
+        .alloc-editor-hint { font-size: 0.78rem; color: var(--text-muted); margin: 0 0 0.75rem; line-height: 1.5; }
         .alloc-editor-rows { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; }
         .alloc-editor-row { display: flex; align-items: center; gap: 0.75rem; }
-        .alloc-editor-name { flex: 1; color: #f4f4f5; font-size: 0.9rem; }
+        .alloc-editor-name { flex: 1; color: var(--text-primary); font-size: 0.9rem; }
         .alloc-editor-input-wrap { position: relative; width: 100px; }
-        .alloc-editor-pct { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #71717a; font-size: 0.875rem; pointer-events: none; }
+        .alloc-editor-pct { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.875rem; pointer-events: none; }
         .alloc-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
         .alloc-editor-total { font-size: 0.85rem; font-family: 'DM Mono', monospace; }
-        .alloc-editor-total--ok { color: #4ade80; }
-        .alloc-editor-total--bad { color: #f87171; }
-        .alloc-editor-error { color: #f87171; font-size: 0.8rem; margin: 0.5rem 0 0; }
-        .alloc-editor-saved { color: #4ade80; font-size: 0.8rem; margin: 0.5rem 0 0; }
+        .alloc-editor-total--ok { color: var(--success); }
+        .alloc-editor-total--bad { color: var(--danger); }
+        .alloc-editor-error { color: var(--danger); font-size: 0.8rem; margin: 0.5rem 0 0; }
+        .alloc-editor-saved { color: var(--success); font-size: 0.8rem; margin: 0.5rem 0 0; }
       `}</style>
     </div>
   )
@@ -320,7 +320,7 @@ export function MembersAndCards() {
         </div>
 
         {!profile ? (
-          <p className="settings-empty" style={{ color: '#52525b' }}>Loading…</p>
+          <p className="settings-empty" style={{ color: 'var(--text-faint)' }}>Loading…</p>
         ) : profile.cards.length === 0 ? (
           <p className="settings-empty">No cards added yet.</p>
         ) : (
@@ -371,8 +371,8 @@ export function MembersAndCards() {
           font-family: 'Geist', 'DM Sans', sans-serif;
         }
         .settings-section {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 16px;
           overflow: hidden;
         }
@@ -381,20 +381,20 @@ export function MembersAndCards() {
           align-items: center;
           justify-content: space-between;
           padding: 1rem 1.25rem 0.75rem;
-          border-bottom: 1px solid #27272a;
+          border-bottom: 1px solid var(--border);
         }
         .settings-section-title {
           font-size: 0.875rem;
           font-weight: 600;
-          color: #f4f4f5;
+          color: var(--text-primary);
           margin: 0;
           letter-spacing: -0.01em;
         }
         .icon-btn {
           background: none;
-          border: 1px solid #3f3f46;
+          border: 1px solid var(--border-input);
           border-radius: 8px;
-          color: #818cf8;
+          color: var(--accent-light);
           font-size: 0.8rem;
           font-weight: 500;
           padding: 0.3rem 0.7rem;
@@ -402,7 +402,7 @@ export function MembersAndCards() {
           transition: background 0.15s, border-color 0.15s;
           font-family: inherit;
         }
-        .icon-btn:hover { background: #27272a; border-color: #52525b; }
+        .icon-btn:hover { background: var(--badge-bg); border-color: var(--border-input); }
         .settings-list {
           list-style: none;
           margin: 0;
@@ -413,11 +413,11 @@ export function MembersAndCards() {
           align-items: center;
           gap: 0.75rem;
           padding: 0.875rem 1.25rem;
-          border-bottom: 1px solid #1f1f22;
+          border-bottom: 1px solid var(--border-subtle);
         }
         .settings-list-item:last-child { border-bottom: none; }
         .settings-empty {
-          color: #52525b;
+          color: var(--text-faint);
           font-size: 0.875rem;
           padding: 1.25rem;
           margin: 0;
@@ -426,15 +426,15 @@ export function MembersAndCards() {
         /* Member row */
         .member-avatar {
           width: 32px; height: 32px;
-          background: #27272a;
+          background: var(--badge-bg);
           border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.875rem; font-weight: 600; color: #a1a1aa;
+          font-size: 0.875rem; font-weight: 600; color: var(--text-secondary);
           flex-shrink: 0;
         }
         .member-name {
           flex: 1;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.9rem;
         }
         .role-badge {
@@ -447,13 +447,13 @@ export function MembersAndCards() {
         }
         .role-badge--admin {
           background: rgba(99,102,241,0.15);
-          color: #818cf8;
+          color: var(--accent-light);
           border: 1px solid rgba(99,102,241,0.25);
         }
         .role-badge--member {
-          background: #27272a;
-          color: #71717a;
-          border: 1px solid #3f3f46;
+          background: var(--badge-bg);
+          color: var(--text-muted);
+          border: 1px solid var(--border-input);
         }
 
         /* Card row */
@@ -465,19 +465,19 @@ export function MembersAndCards() {
           gap: 2px;
         }
         .card-label {
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.9rem;
           font-weight: 500;
         }
         .card-digits {
-          color: #71717a;
+          color: var(--text-muted);
           font-size: 0.8rem;
           font-family: 'DM Mono', monospace;
         }
         .delete-btn {
           background: none;
           border: none;
-          color: #52525b;
+          color: var(--text-faint);
           font-size: 1.1rem;
           line-height: 1;
           cursor: pointer;
@@ -485,7 +485,7 @@ export function MembersAndCards() {
           border-radius: 6px;
           transition: color 0.15s, background 0.15s;
         }
-        .delete-btn:hover:not(:disabled) { color: #f87171; background: rgba(248,113,113,0.1); }
+        .delete-btn:hover:not(:disabled) { color: var(--danger); background: rgba(248,113,113,0.1); }
         .delete-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
         /* Modal */
@@ -504,8 +504,8 @@ export function MembersAndCards() {
           .modal-backdrop { align-items: center; }
         }
         .modal-card {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 20px 20px 0 0;
           padding: 1.75rem 1.5rem 2rem;
           width: 100%;
@@ -518,13 +518,13 @@ export function MembersAndCards() {
         .modal-title {
           font-size: 1rem;
           font-weight: 600;
-          color: #f4f4f5;
+          color: var(--text-primary);
           margin: 0 0 1.25rem;
         }
         .invite-sent-icon {
           font-size: 2rem;
           text-align: center;
-          color: #4ade80;
+          color: var(--success);
           margin: 0 0 0.5rem;
         }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

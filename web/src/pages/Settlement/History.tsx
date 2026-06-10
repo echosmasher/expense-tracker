@@ -230,7 +230,7 @@ export function History() {
           margin: 0 auto;
           padding: 1.25rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .history-topbar {
           display: flex;
@@ -240,7 +240,7 @@ export function History() {
         }
         .back-btn {
           background: none; border: none;
-          color: #818cf8; font-size: 0.9rem;
+          color: var(--accent-light); font-size: 0.9rem;
           cursor: pointer; padding: 0;
           font-family: inherit;
           white-space: nowrap;
@@ -252,22 +252,22 @@ export function History() {
           letter-spacing: -0.02em;
         }
         .history-msg {
-          color: #71717a; font-size: 0.9rem;
+          color: var(--text-muted); font-size: 0.9rem;
           text-align: center; padding: 2rem 0; margin: 0;
         }
-        .history-msg--error { color: #f87171; }
+        .history-msg--error { color: var(--danger); }
         .history-section { margin-bottom: 1.75rem; }
         .section-label {
           font-size: 0.75rem;
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: #71717a;
+          color: var(--text-muted);
           margin: 0 0 0.625rem 0.25rem;
         }
         .history-card {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           overflow: hidden;
           margin-bottom: 0.5rem;
@@ -285,7 +285,7 @@ export function History() {
           text-align: left;
           gap: 0.5rem;
         }
-        .history-card-header:hover { background: #1f1f22; }
+        .history-card-header:hover { background: var(--bg-card-hover); }
         .history-card-left {
           display: flex;
           flex-direction: column;
@@ -294,7 +294,7 @@ export function History() {
         .history-period {
           font-size: 0.9rem;
           font-weight: 500;
-          color: #f4f4f5;
+          color: var(--text-primary);
           text-transform: capitalize;
           display: flex;
           align-items: baseline;
@@ -303,13 +303,13 @@ export function History() {
         .history-created {
           font-size: 0.72rem;
           font-weight: 400;
-          color: #52525b;
+          color: var(--text-faint);
           text-transform: none;
         }
         .history-total {
           font-family: 'DM Mono', monospace;
           font-size: 0.78rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .history-card-right {
           display: flex;
@@ -326,39 +326,39 @@ export function History() {
           border-radius: 5px;
         }
         .history-status--completed {
-          background: #27272a;
-          color: #71717a;
-          border: 1px solid #3f3f46;
+          background: var(--badge-bg);
+          color: var(--text-muted);
+          border: 1px solid var(--border-input);
         }
         .history-status--open {
           background: rgba(251,191,36,0.12);
-          color: #fbbf24;
+          color: var(--warning);
           border: 1px solid rgba(251,191,36,0.2);
         }
-        .history-chevron { color: #52525b; font-size: 0.65rem; }
+        .history-chevron { color: var(--text-faint); font-size: 0.65rem; }
         .history-detail {
-          border-top: 1px solid #27272a;
+          border-top: 1px solid var(--border);
           padding: 0.75rem 1rem;
           display: flex;
           flex-direction: column;
           gap: 0.5rem;
         }
         .history-loading, .history-no-tx {
-          color: #52525b; font-size: 0.85rem; margin: 0; padding: 0.25rem 0;
+          color: var(--text-faint); font-size: 0.85rem; margin: 0; padding: 0.25rem 0;
         }
         .history-tx {
           display: flex;
           justify-content: space-between;
           font-size: 0.85rem;
-          color: #a1a1aa;
+          color: var(--text-secondary);
         }
         .history-tx-amount {
           font-family: 'DM Mono', monospace;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
-        .history-tx-amount--paid { color: #4ade80; }
+        .history-tx-amount--paid { color: var(--success); }
         .history-balances {
-          border-top: 1px solid #27272a;
+          border-top: 1px solid var(--border);
           padding-top: 0.5rem;
           display: flex;
           flex-direction: column;
@@ -368,13 +368,13 @@ export function History() {
           display: flex;
           justify-content: space-between;
           font-size: 0.8rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .hb-amount { font-family: 'DM Mono', monospace; }
-        .hb-amount--credit { color: #4ade80; }
-        .hb-amount--debit { color: #f87171; }
+        .hb-amount--credit { color: var(--success); }
+        .hb-amount--debit { color: var(--danger); }
         .history-included {
-          border-top: 1px solid #27272a;
+          border-top: 1px solid var(--border);
           padding-top: 0.6rem;
           display: flex;
           flex-direction: column;
@@ -385,7 +385,7 @@ export function History() {
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: #52525b;
+          color: var(--text-faint);
         }
         .history-included-group {
           display: flex;
@@ -396,7 +396,7 @@ export function History() {
           display: flex;
           justify-content: space-between;
           font-size: 0.78rem;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           text-transform: capitalize;
         }
         .history-included-month-total {
@@ -406,11 +406,11 @@ export function History() {
           display: flex;
           justify-content: space-between;
           font-size: 0.78rem;
-          color: #71717a;
+          color: var(--text-muted);
           padding-left: 0.75rem;
         }
-        .history-included-store { color: #a1a1aa; }
-        .history-included-date { color: #52525b; }
+        .history-included-store { color: var(--text-secondary); }
+        .history-included-date { color: var(--text-faint); }
         .history-included-amount { font-family: 'DM Mono', monospace; }
       `}</style>
     </div>

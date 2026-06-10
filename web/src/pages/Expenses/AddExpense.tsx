@@ -114,7 +114,7 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
           margin: 0 auto;
           padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .page-title {
           font-size: 1.25rem;
@@ -123,9 +123,9 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
           letter-spacing: -0.02em;
         }
         .upload-zone {
-          border: 1.5px dashed #3f3f46;
+          border: 1.5px dashed var(--border-input);
           border-radius: 16px;
-          background: #18181b;
+          background: var(--bg-card);
           padding: 3rem 1.5rem;
           display: flex;
           flex-direction: column;
@@ -135,18 +135,18 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
           transition: border-color 0.15s, background 0.15s;
         }
         .upload-zone:hover, .upload-zone--active {
-          border-color: #6366f1;
+          border-color: var(--accent);
           background: rgba(99,102,241,0.05);
         }
         .upload-zone--loading { cursor: default; }
-        .upload-icon { color: #52525b; }
-        .upload-primary { color: #a1a1aa; font-size: 0.9rem; margin: 0; }
-        .upload-hint { color: #52525b; font-size: 0.8rem; margin: 0; }
-        .upload-error { color: #f87171; font-size: 0.85rem; margin-top: 0.75rem; }
+        .upload-icon { color: var(--text-faint); }
+        .upload-primary { color: var(--text-secondary); font-size: 0.9rem; margin: 0; }
+        .upload-hint { color: var(--text-faint); font-size: 0.8rem; margin: 0; }
+        .upload-error { color: var(--danger); font-size: 0.85rem; margin-top: 0.75rem; }
         .upload-spinner {
           width: 28px; height: 28px;
-          border: 2px solid #3f3f46;
-          border-top-color: #6366f1;
+          border: 2px solid var(--border-input);
+          border-top-color: var(--accent);
           border-radius: 50%;
           animation: spin 0.7s linear infinite;
         }
@@ -419,7 +419,7 @@ function ReviewStep({
 
       <button className="add-item-btn" onClick={addItem}>+ Add item</button>
 
-      {error && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: '0.75rem 0 0' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: '0.75rem 0 0' }}>{error}</p>}
 
       <div style={{ marginTop: '1.5rem' }}>
         <Button loading={saving} onClick={handleConfirm}>
@@ -433,7 +433,7 @@ function ReviewStep({
           margin: 0 auto;
           padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
           display: flex;
           flex-direction: column;
           gap: 1rem;
@@ -447,7 +447,7 @@ function ReviewStep({
         .back-btn {
           background: none;
           border: none;
-          color: #818cf8;
+          color: var(--accent-light);
           font-size: 0.9rem;
           cursor: pointer;
           padding: 0;
@@ -469,7 +469,7 @@ function ReviewStep({
         .receipt-preview {
           width: 100%;
           border-radius: 12px;
-          border: 1px solid #27272a;
+          border: 1px solid var(--border);
           max-height: 200px;
           object-fit: cover;
         }
@@ -482,14 +482,14 @@ function ReviewStep({
         .items-label {
           font-size: 0.75rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.06em;
         }
         .items-total {
           font-family: 'DM Mono', monospace;
           font-size: 0.9rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-weight: 500;
         }
         .items-list {
@@ -498,8 +498,8 @@ function ReviewStep({
           gap: 0.5rem;
         }
         .item-row {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 12px;
           padding: 0.75rem 0.875rem;
         }
@@ -512,14 +512,14 @@ function ReviewStep({
         .item-desc {
           background: none;
           border: none;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.9rem;
           font-family: inherit;
           outline: none;
           width: 100%;
           padding: 0;
         }
-        .item-desc::placeholder { color: #52525b; }
+        .item-desc::placeholder { color: var(--text-faint); }
         .item-numbers {
           display: flex;
           align-items: center;
@@ -527,30 +527,30 @@ function ReviewStep({
         }
         .item-qty {
           width: 48px;
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-base);
+          border: 1px solid var(--border-input);
           border-radius: 6px;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           font-size: 0.85rem;
           font-family: 'DM Mono', monospace;
           padding: 0.25rem 0.4rem;
           outline: none;
           text-align: center;
         }
-        .item-sep { color: #52525b; font-size: 0.85rem; }
+        .item-sep { color: var(--text-faint); font-size: 0.85rem; }
         .item-price {
           width: 80px;
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-base);
+          border: 1px solid var(--border-input);
           border-radius: 6px;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           font-size: 0.85rem;
           font-family: 'DM Mono', monospace;
           padding: 0.25rem 0.4rem;
           outline: none;
           text-align: right;
         }
-        .item-ore-label { color: #52525b; font-size: 0.75rem; }
+        .item-ore-label { color: var(--text-faint); font-size: 0.75rem; }
         .item-actions {
           display: flex;
           align-items: center;
@@ -562,7 +562,7 @@ function ReviewStep({
           align-items: center;
           gap: 0.35rem;
           font-size: 0.8rem;
-          color: #71717a;
+          color: var(--text-muted);
           cursor: pointer;
         }
         .item-personal-cb { accent-color: #6366f1; cursor: pointer; }
@@ -571,19 +571,19 @@ function ReviewStep({
           margin-left: auto;
           background: none;
           border: none;
-          color: #52525b;
+          color: var(--text-faint);
           font-size: 1.1rem;
           cursor: pointer;
           padding: 0 0.25rem;
           transition: color 0.15s;
           font-family: inherit;
         }
-        .item-remove:hover { color: #f87171; }
+        .item-remove:hover { color: var(--danger); }
         .add-item-btn {
           background: none;
-          border: 1px dashed #3f3f46;
+          border: 1px dashed var(--border-input);
           border-radius: 10px;
-          color: #6366f1;
+          color: var(--accent);
           font-size: 0.875rem;
           font-family: inherit;
           padding: 0.6rem;
@@ -591,7 +591,7 @@ function ReviewStep({
           width: 100%;
           transition: background 0.15s, border-color 0.15s;
         }
-        .add-item-btn:hover { background: rgba(99,102,241,0.06); border-color: #6366f1; }
+        .add-item-btn:hover { background: rgba(99,102,241,0.06); border-color: var(--accent); }
 
         .cat-badge-wrapper { position: relative; }
         .cat-badge {
@@ -601,18 +601,18 @@ function ReviewStep({
           font-size: 0.7rem;
           font-weight: 500;
           font-family: inherit;
-          border: 1px solid #3f3f46;
-          background: #27272a;
-          color: #a1a1aa;
+          border: 1px solid var(--border-input);
+          background: var(--badge-bg);
+          color: var(--text-secondary);
           cursor: pointer;
           white-space: nowrap;
           transition: border-color 0.15s;
         }
-        .cat-badge:hover { border-color: #6366f1; }
+        .cat-badge:hover { border-color: var(--accent); }
         .cat-badge--uncat {
           border-color: #92400e;
           background: rgba(146,64,14,0.15);
-          color: #fbbf24;
+          color: var(--warning);
         }
         .cat-dropdown {
           position: absolute;
@@ -622,8 +622,8 @@ function ReviewStep({
           min-width: 180px;
           max-height: 220px;
           overflow-y: auto;
-          background: #18181b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-card);
+          border: 1px solid var(--border-input);
           border-radius: 10px;
           padding: 0.25rem;
           display: flex;
@@ -641,8 +641,8 @@ function ReviewStep({
           border-radius: 6px;
           transition: background 0.1s;
         }
-        .cat-option:hover { background: #27272a; }
-        .cat-option--new { color: #818cf8; }
+        .cat-option:hover { background: var(--badge-bg); }
+        .cat-option--new { color: var(--accent-light); }
         .cat-new-row {
           display: flex;
           gap: 0.35rem;
@@ -650,18 +650,18 @@ function ReviewStep({
         }
         .cat-new-input {
           flex: 1;
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-base);
+          border: 1px solid var(--border-input);
           border-radius: 6px;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.8rem;
           font-family: inherit;
           padding: 0.25rem 0.4rem;
           outline: none;
         }
-        .cat-new-input:focus { border-color: #6366f1; }
+        .cat-new-input:focus { border-color: var(--accent); }
         .cat-new-btn {
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 6px;
           color: #fff;

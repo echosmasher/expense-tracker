@@ -15,20 +15,20 @@ export function FormField({ label, error, children }: FormFieldProps) {
         .field-label {
           font-size: 0.75rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           letter-spacing: 0.06em;
           text-transform: uppercase;
         }
         .field-error {
           font-size: 0.78rem;
-          color: #f87171;
+          color: var(--danger);
           margin: 0;
         }
         input.field-input, select.field-input {
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-input);
+          border: 1px solid var(--border-input);
           border-radius: 10px;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-family: inherit;
           font-size: 0.9375rem;
           padding: 0.65rem 0.875rem;
@@ -37,10 +37,10 @@ export function FormField({ label, error, children }: FormFieldProps) {
           width: 100%;
         }
         input.field-input:focus, select.field-input:focus {
-          border-color: #6366f1;
+          border-color: var(--accent);
           box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
         }
-        input.field-input::placeholder { color: #52525b; }
+        input.field-input::placeholder { color: var(--text-faint); }
       `}</style>
     </div>
   )

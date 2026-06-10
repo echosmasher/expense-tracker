@@ -157,44 +157,44 @@ export function ProjectDetail() {
       )}
 
       <style>{`
-        .project-detail-page { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
+        .project-detail-page { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 2rem; font-family: 'Geist', sans-serif; color: var(--text-primary); }
         .pd-topbar { margin-bottom: 1.25rem; }
-        .back-btn { background: none; border: none; color: #818cf8; font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; }
-        .pd-msg { color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
-        .pd-msg--error { color: #f87171; }
+        .back-btn { background: none; border: none; color: var(--accent-light); font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; }
+        .pd-msg { color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
+        .pd-msg--error { color: var(--danger); }
         .pd-head { margin-bottom: 1.5rem; }
         .pd-head-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.3rem; }
         .pd-name { font-size: 1.375rem; font-weight: 600; margin: 0; letter-spacing: -0.025em; }
         .pd-status { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.5rem; border-radius: 5px; }
-        .pd-status--active { background: rgba(34,197,94,0.1); color: #4ade80; border: 1px solid rgba(34,197,94,0.2); }
-        .pd-status--settling { background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
-        .pd-status--settled { background: #27272a; color: #71717a; border: 1px solid #3f3f46; }
-        .pd-description { color: #71717a; font-size: 0.875rem; margin: 0 0 0.75rem; }
+        .pd-status--active { background: rgba(34,197,94,0.1); color: var(--success); border: 1px solid rgba(34,197,94,0.2); }
+        .pd-status--settling { background: rgba(251,191,36,0.12); color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
+        .pd-status--settled { background: var(--badge-bg); color: var(--text-muted); border: 1px solid var(--border-input); }
+        .pd-description { color: var(--text-muted); font-size: 0.875rem; margin: 0 0 0.75rem; }
         .pd-total { font-family: 'DM Mono', monospace; font-size: 1.75rem; font-weight: 500; letter-spacing: -0.02em; }
         .pd-section { margin-bottom: 1.5rem; }
         .pd-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.625rem; }
-        .pd-section-title { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: #71717a; margin: 0 0 0.625rem 0.25rem; }
-        .pd-members { background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; }
-        .pd-member-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid #1f1f22; }
+        .pd-section-title { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 0.625rem 0.25rem; }
+        .pd-members { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .pd-member-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle); }
         .pd-member-row:last-child { border-bottom: none; }
-        .pd-avatar { width: 28px; height: 28px; background: #27272a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600; color: #a1a1aa; flex-shrink: 0; }
+        .pd-avatar { width: 28px; height: 28px; background: var(--badge-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
         .pd-member-name { flex: 1; font-size: 0.875rem; }
-        .pd-share { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: #71717a; }
-        .add-expense-btn { background: none; border: 1px solid #3f3f46; border-radius: 8px; color: #818cf8; font-size: 0.8rem; font-weight: 500; padding: 0.3rem 0.7rem; cursor: pointer; font-family: inherit; }
-        .pd-empty { color: #52525b; font-size: 0.875rem; margin: 0; padding: 1rem; text-align: center; }
-        .pd-expense-list { list-style: none; margin: 0; padding: 0; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; }
-        .pd-expense-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid #1f1f22; }
+        .pd-share { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--text-muted); }
+        .add-expense-btn { background: none; border: 1px solid var(--border-input); border-radius: 8px; color: var(--accent-light); font-size: 0.8rem; font-weight: 500; padding: 0.3rem 0.7rem; cursor: pointer; font-family: inherit; }
+        .pd-empty { color: var(--text-faint); font-size: 0.875rem; margin: 0; padding: 1rem; text-align: center; }
+        .pd-expense-list { list-style: none; margin: 0; padding: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .pd-expense-item { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-subtle); }
         .pd-expense-item:last-child { border-bottom: none; }
-        .pd-exp-store { font-size: 0.875rem; font-weight: 500; color: #f4f4f5; }
-        .pd-exp-meta { font-size: 0.75rem; color: #71717a; margin-top: 2px; }
-        .pd-exp-amount { font-family: 'DM Mono', monospace; font-size: 0.875rem; color: #f4f4f5; flex-shrink: 0; }
-        .pd-finish-area { background: #18181b; border: 1px solid #27272a; border-radius: 14px; padding: 1.25rem; }
-        .pd-finish-hint { font-size: 0.85rem; color: #71717a; margin: 0 0 1rem; line-height: 1.5; }
-        .pd-finish-btn { width: 100%; background: #6366f1; border: none; border-radius: 10px; color: #fff; font-size: 0.9375rem; font-weight: 500; padding: 0.7rem; cursor: pointer; font-family: inherit; transition: background 0.15s, opacity 0.15s; }
-        .pd-finish-btn:hover { background: #4f46e5; }
+        .pd-exp-store { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
+        .pd-exp-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+        .pd-exp-amount { font-family: 'DM Mono', monospace; font-size: 0.875rem; color: var(--text-primary); flex-shrink: 0; }
+        .pd-finish-area { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; }
+        .pd-finish-hint { font-size: 0.85rem; color: var(--text-muted); margin: 0 0 1rem; line-height: 1.5; }
+        .pd-finish-btn { width: 100%; background: var(--accent); border: none; border-radius: 10px; color: #fff; font-size: 0.9375rem; font-weight: 500; padding: 0.7rem; cursor: pointer; font-family: inherit; transition: background 0.15s, opacity 0.15s; }
+        .pd-finish-btn:hover { background: var(--accent-hover); }
         .pd-finish-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .pd-settling-banner { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 10px; color: #fbbf24; font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
-        .pd-settled-banner { background: #18181b; border: 1px solid #27272a; border-radius: 10px; color: #71717a; font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
+        .pd-settling-banner { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 10px; color: var(--warning); font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
+        .pd-settled-banner { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
       `}</style>
     </div>
   )

@@ -6,6 +6,12 @@ import { useAuthStore } from '../../stores/authStore'
 import { Button } from '../../components/Button'
 import { FormField, Input } from '../../components/FormField'
 
+/** Apply a theme to the document and persist it for the next load. */
+function applyTheme(theme: 'light' | 'dark') {
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('theme', theme)
+}
+
 // ─── Avatar Section ─────────────────────────────────────────────────────────
 
 function AvatarSection({
@@ -353,7 +359,13 @@ export function ProfileSettings() {
 
   useEffect(() => {
     users.me()
-      .then((p) => { setProfile(p); setLoading(false) })
+      .then((p) => {
+        setProfile(p)
+        setLoading(false)
+        // Sync the server's theme to the DOM + localStorage so it survives
+        // reloads and themes the pre-login screens.
+        applyTheme(p.preferences.theme)
+      })
       .catch((err) => { setError(err?.message ?? 'Failed to load profile'); setLoading(false) })
   }, [])
 
@@ -372,7 +384,7 @@ export function ProfileSettings() {
 
   function handlePrefsSaved(prefs: UserPreferences) {
     setProfile((p) => p ? { ...p, preferences: prefs } : p)
-    document.documentElement.setAttribute('data-theme', prefs.theme)
+    applyTheme(prefs.theme)
   }
 
   return (
@@ -409,7 +421,7 @@ export function ProfileSettings() {
           margin: 0 auto;
           padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
@@ -422,14 +434,14 @@ export function ProfileSettings() {
           letter-spacing: -0.025em;
         }
 
-        .ps-loading { color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
-        .ps-error { color: #f87171; font-size: 0.85rem; margin: 0; }
-        .ps-success { color: #4ade80; font-size: 0.85rem; margin: 0; }
+        .ps-loading { color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
+        .ps-error { color: var(--danger); font-size: 0.85rem; margin: 0; }
+        .ps-success { color: var(--success); font-size: 0.85rem; margin: 0; }
 
         /* ── Section card ────────────────────────── */
         .ps-section {
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 16px;
           padding: 1.25rem 1.5rem;
         }
@@ -443,7 +455,7 @@ export function ProfileSettings() {
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: #71717a;
+          color: var(--text-muted);
           margin: 0 0 1rem;
         }
 
@@ -464,7 +476,7 @@ export function ProfileSettings() {
           width: 72px;
           height: 72px;
           border-radius: 50%;
-          background: #27272a;
+          background: var(--badge-bg);
           overflow: hidden;
           cursor: pointer;
           position: relative;
@@ -483,14 +495,14 @@ export function ProfileSettings() {
         .avatar-initial {
           font-size: 1.5rem;
           font-weight: 600;
-          color: #a1a1aa;
+          color: var(--text-secondary);
         }
 
         .avatar-overlay {
           position: absolute;
           inset: 0;
           background: rgba(0,0,0,0.55);
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-size: 0.72rem;
           font-weight: 600;
           text-transform: uppercase;
@@ -504,8 +516,8 @@ export function ProfileSettings() {
 
         .avatar-preview:hover .avatar-overlay { opacity: 1; }
 
-        .avatar-hint { color: #52525b; font-size: 0.8rem; margin: 0; line-height: 1.4; }
-        .avatar-error { color: #f87171; font-size: 0.8rem; margin: 0.25rem 0 0; }
+        .avatar-hint { color: var(--text-faint); font-size: 0.8rem; margin: 0; line-height: 1.4; }
+        .avatar-error { color: var(--danger); font-size: 0.8rem; margin: 0.25rem 0 0; }
 
         /* ── Display name ────────────────────────── */
         .ps-field-row {
@@ -524,13 +536,13 @@ export function ProfileSettings() {
         }
 
         .theme-info { display: flex; flex-direction: column; gap: 2px; }
-        .theme-label { font-size: 0.9rem; color: #f4f4f5; font-weight: 500; }
-        .theme-value { font-size: 0.78rem; color: #71717a; }
+        .theme-label { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
+        .theme-value { font-size: 0.78rem; color: var(--text-muted); }
 
         .theme-btn {
           display: flex;
-          background: #09090b;
-          border: 1px solid #3f3f46;
+          background: var(--bg-base);
+          border: 1px solid var(--border-input);
           border-radius: 10px;
           padding: 3px;
           cursor: pointer;
@@ -542,20 +554,20 @@ export function ProfileSettings() {
           border-radius: 8px;
           font-size: 0.8rem;
           font-weight: 500;
-          color: #71717a;
+          color: var(--text-muted);
           font-family: inherit;
           transition: background 0.15s, color 0.15s;
         }
 
         .theme-option--active {
-          background: #27272a;
-          color: #f4f4f5;
+          background: var(--badge-bg);
+          color: var(--text-primary);
         }
 
         .prefs-sub-title {
           font-size: 0.8rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           margin: 1.25rem 0 0.25rem;
         }
 
@@ -582,14 +594,14 @@ export function ProfileSettings() {
           align-items: center;
           justify-content: space-between;
           padding: 0.75rem 0;
-          border-bottom: 1px solid #1f1f22;
+          border-bottom: 1px solid var(--border-subtle);
           cursor: pointer;
         }
         .notif-row:last-child { border-bottom: none; }
 
         .notif-info { display: flex; flex-direction: column; gap: 2px; }
-        .notif-label { font-size: 0.875rem; color: #f4f4f5; font-weight: 500; }
-        .notif-desc { font-size: 0.78rem; color: #52525b; }
+        .notif-label { font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }
+        .notif-desc { font-size: 0.78rem; color: var(--text-faint); }
 
         .notif-cb {
           width: 18px;
@@ -608,14 +620,14 @@ export function ProfileSettings() {
         }
 
         .danger-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-        .danger-label { font-size: 0.875rem; color: #f4f4f5; font-weight: 500; }
-        .danger-desc { font-size: 0.78rem; color: #52525b; line-height: 1.4; }
+        .danger-label { font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }
+        .danger-desc { font-size: 0.78rem; color: var(--text-faint); line-height: 1.4; }
 
         .danger-btn {
           background: rgba(248,113,113,0.1);
           border: 1px solid rgba(248,113,113,0.25);
           border-radius: 10px;
-          color: #f87171;
+          color: var(--danger);
           font-size: 0.85rem;
           font-weight: 500;
           padding: 0.5rem 1rem;
@@ -628,7 +640,7 @@ export function ProfileSettings() {
         .danger-btn:hover { background: rgba(248,113,113,0.18); }
 
         .danger-warning {
-          color: #f87171;
+          color: var(--danger);
           font-size: 0.85rem;
           line-height: 1.5;
           margin: 0 0 1rem;

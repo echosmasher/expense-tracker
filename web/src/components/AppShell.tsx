@@ -98,17 +98,17 @@ export function AppShell() {
         .app-shell {
           display: flex;
           min-height: 100dvh;
-          background: #09090b;
+          background: var(--bg-base);
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
 
         /* ── Sidebar ─────────────────────────────────── */
         .app-sidebar {
           width: 240px;
           flex-shrink: 0;
-          background: #111113;
-          border-right: 1px solid #1f1f22;
+          background: var(--bg-sidebar);
+          border-right: 1px solid var(--border-subtle);
           display: flex;
           flex-direction: column;
           padding: 1.5rem 0;
@@ -124,11 +124,11 @@ export function AppShell() {
           font-family: 'Instrument Serif', Georgia, serif;
           font-style: italic;
           font-size: 1.5rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
           letter-spacing: -0.01em;
         }
 
-        .brand-dot { color: #6366f1; }
+        .brand-dot { color: var(--accent); }
 
         .sidebar-nav {
           flex: 1;
@@ -145,20 +145,20 @@ export function AppShell() {
           padding: 0.6rem 0.75rem;
           border-radius: 8px;
           text-decoration: none;
-          color: #71717a;
+          color: var(--text-muted);
           font-size: 0.875rem;
           font-weight: 450;
           transition: background 0.12s, color 0.12s;
         }
 
         .nav-item:hover {
-          background: #18181b;
-          color: #a1a1aa;
+          background: var(--bg-card);
+          color: var(--text-secondary);
         }
 
         .nav-item--active {
-          background: #18181b;
-          color: #f4f4f5;
+          background: var(--bg-card);
+          color: var(--text-primary);
         }
 
         .nav-item--active .nav-icon {
@@ -184,7 +184,7 @@ export function AppShell() {
         /* ── Footer ──────────────────────────────────── */
         .sidebar-footer {
           padding: 1rem 1rem 0;
-          border-top: 1px solid #1f1f22;
+          border-top: 1px solid var(--border-subtle);
           margin-top: 0.5rem;
         }
 
@@ -202,37 +202,37 @@ export function AppShell() {
         }
 
         .sidebar-user:hover {
-          background: #18181b;
+          background: var(--bg-card);
         }
 
         .user-settings-hint {
           margin-left: auto;
           font-size: 0.7rem;
-          color: #3f3f46;
+          color: var(--text-faint);
           transition: color 0.12s;
         }
 
         .sidebar-user:hover .user-settings-hint {
-          color: #71717a;
+          color: var(--text-muted);
         }
 
         .user-avatar {
           width: 28px;
           height: 28px;
-          background: #27272a;
+          background: var(--badge-bg);
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 0.75rem;
           font-weight: 600;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           flex-shrink: 0;
         }
 
         .user-name {
           font-size: 0.8rem;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -241,9 +241,9 @@ export function AppShell() {
         .logout-btn {
           width: 100%;
           background: none;
-          border: 1px solid #27272a;
+          border: 1px solid var(--border);
           border-radius: 8px;
-          color: #52525b;
+          color: var(--text-faint);
           font-size: 0.78rem;
           font-weight: 500;
           padding: 0.4rem;
@@ -253,7 +253,7 @@ export function AppShell() {
         }
 
         .logout-btn:hover {
-          color: #f87171;
+          color: var(--danger);
           border-color: rgba(248,113,113,0.3);
         }
 

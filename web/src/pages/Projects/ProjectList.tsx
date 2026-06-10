@@ -30,7 +30,7 @@ export function ProjectList() {
   function statusColor(status: string) {
     if (status === 'active') return '#4ade80'
     if (status === 'settling') return '#fbbf24'
-    return '#71717a'
+    return 'var(--text-muted)'
   }
 
   return (
@@ -82,25 +82,25 @@ export function ProjectList() {
       )}
 
       <style>{`
-        .projects-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 2rem; font-family: 'Geist', sans-serif; color: #f4f4f5; }
+        .projects-page { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 2rem; font-family: 'Geist', sans-serif; color: var(--text-primary); }
         .projects-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
         .projects-title { font-size: 1.375rem; font-weight: 600; margin: 0; letter-spacing: -0.025em; }
-        .new-btn { background: #6366f1; border: none; border-radius: 10px; color: #fff; font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1rem; cursor: pointer; font-family: inherit; transition: background 0.15s; }
-        .new-btn:hover { background: #4f46e5; }
-        .projects-msg { color: #71717a; font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
-        .projects-msg--error { color: #f87171; }
+        .new-btn { background: var(--accent); border: none; border-radius: 10px; color: #fff; font-size: 0.875rem; font-weight: 500; padding: 0.5rem 1rem; cursor: pointer; font-family: inherit; transition: background 0.15s; }
+        .new-btn:hover { background: var(--accent-hover); }
+        .projects-msg { color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 2rem 0; margin: 0; }
+        .projects-msg--error { color: var(--danger); }
         .projects-empty { text-align: center; padding: 3rem 0; }
-        .empty-title { font-size: 1rem; font-weight: 500; color: #a1a1aa; margin: 0 0 0.4rem; }
-        .empty-hint { color: #52525b; font-size: 0.875rem; margin: 0 0 1.5rem; line-height: 1.5; }
-        .empty-cta { background: #6366f1; border: none; border-radius: 10px; color: #fff; font-size: 0.875rem; font-weight: 500; padding: 0.6rem 1.25rem; cursor: pointer; font-family: inherit; }
+        .empty-title { font-size: 1rem; font-weight: 500; color: var(--text-secondary); margin: 0 0 0.4rem; }
+        .empty-hint { color: var(--text-faint); font-size: 0.875rem; margin: 0 0 1.5rem; line-height: 1.5; }
+        .empty-cta { background: var(--accent); border: none; border-radius: 10px; color: #fff; font-size: 0.875rem; font-weight: 500; padding: 0.6rem 1.25rem; cursor: pointer; font-family: inherit; }
         .projects-section { margin-bottom: 1.75rem; }
-        .section-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: #71717a; margin: 0 0 0.625rem 0.25rem; }
-        .project-card { display: flex; align-items: center; justify-content: space-between; background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 1rem 1.125rem; margin-bottom: 0.5rem; cursor: pointer; transition: background 0.1s; }
-        .project-card:hover { background: #1f1f22; }
+        .section-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 0.625rem 0.25rem; }
+        .project-card { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.125rem; margin-bottom: 0.5rem; cursor: pointer; transition: background 0.1s; }
+        .project-card:hover { background: var(--bg-card-hover); }
         .project-card--finished { opacity: 0.6; }
         .project-card-left { display: flex; flex-direction: column; gap: 3px; }
-        .project-name { font-size: 0.9rem; font-weight: 500; color: #f4f4f5; }
-        .project-members, .project-status-text { font-size: 0.78rem; color: #71717a; text-transform: capitalize; }
+        .project-name { font-size: 0.9rem; font-weight: 500; color: var(--text-primary); }
+        .project-members, .project-status-text { font-size: 0.78rem; color: var(--text-muted); text-transform: capitalize; }
         .project-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
       `}</style>
     </div>

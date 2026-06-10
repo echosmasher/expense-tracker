@@ -20,7 +20,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
 
         .auth-shell {
           min-height: 100dvh;
-          background: #09090b;
+          background: var(--bg-base);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -33,7 +33,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         .auth-dots {
           position: fixed;
           inset: 0;
-          background-image: radial-gradient(circle, #27272a 1px, transparent 1px);
+          background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
           background-size: 28px 28px;
           opacity: 0.45;
           pointer-events: none;
@@ -43,8 +43,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           position: relative;
           width: 100%;
           max-width: 420px;
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 20px;
           padding: 2.5rem 2rem;
           box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 24px 48px rgba(0,0,0,0.5);
@@ -61,12 +61,12 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           font-family: 'Instrument Serif', Georgia, serif;
           font-style: italic;
           font-size: 1.6rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
           letter-spacing: -0.01em;
         }
 
         .auth-wordmark-dot {
-          color: #6366f1;
+          color: var(--accent);
         }
       `}</style>
     </div>

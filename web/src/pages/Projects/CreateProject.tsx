@@ -150,7 +150,7 @@ export function CreateProject() {
           </div>
         )}
 
-        {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+        {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
 
         <Button type="submit" loading={loading}>Create project</Button>
       </form>
@@ -159,28 +159,28 @@ export function CreateProject() {
         .create-project-page {
           max-width: 720px; margin: 0 auto;
           padding: 1.25rem 1rem 2rem;
-          font-family: 'Geist', sans-serif; color: #f4f4f5;
+          font-family: 'Geist', sans-serif; color: var(--text-primary);
         }
         .cp-topbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-        .back-btn { background: none; border: none; color: #818cf8; font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; white-space: nowrap; }
+        .back-btn { background: none; border: none; color: var(--accent-light); font-size: 0.9rem; cursor: pointer; padding: 0; font-family: inherit; white-space: nowrap; }
         .cp-title { font-size: 1.25rem; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
-        .field-group-label { font-size: 0.75rem; font-weight: 500; color: #a1a1aa; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px; }
-        .field-error { font-size: 0.78rem; color: #f87171; margin: 0 0 6px; }
+        .field-group-label { font-size: 0.75rem; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 8px; }
+        .field-error { font-size: 0.78rem; color: var(--danger); margin: 0 0 6px; }
         .member-select-list { display: flex; flex-direction: column; gap: 0.5rem; }
         .member-option {
           display: flex; align-items: center; gap: 0.75rem;
-          background: #18181b; border: 1px solid #27272a; border-radius: 10px;
+          background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
           padding: 0.75rem; cursor: pointer; transition: border-color 0.15s;
         }
-        .member-option--selected { border-color: #6366f1; background: rgba(99,102,241,0.06); }
+        .member-option--selected { border-color: var(--accent); background: rgba(99,102,241,0.06); }
         .member-option-cb { accent-color: #6366f1; }
-        .member-avatar { width: 28px; height: 28px; background: #27272a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600; color: #a1a1aa; flex-shrink: 0; }
-        .member-option-name { font-size: 0.875rem; color: #f4f4f5; }
+        .member-avatar { width: 28px; height: 28px; background: var(--badge-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
+        .member-option-name { font-size: 0.875rem; color: var(--text-primary); }
         .shares-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .share-row { display: flex; align-items: center; justify-content: space-between; background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 0.75rem 1rem; }
-        .share-name { font-size: 0.875rem; color: #f4f4f5; }
+        .share-row { display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem; }
+        .share-name { font-size: 0.875rem; color: var(--text-primary); }
         .share-input-wrap { position: relative; display: flex; align-items: center; }
-        .share-pct { position: absolute; right: 0.6rem; color: #71717a; font-size: 0.875rem; pointer-events: none; }
+        .share-pct { position: absolute; right: 0.6rem; color: var(--text-muted); font-size: 0.875rem; pointer-events: none; }
       `}</style>
     </div>
   )

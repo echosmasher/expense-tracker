@@ -121,7 +121,7 @@ export function CreateHousehold() {
           </div>
         </div>
 
-        {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+        {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
 
         <Button type="submit" loading={loading} style={{ marginTop: '0.5rem' }}>
           Create household
@@ -131,20 +131,20 @@ export function CreateHousehold() {
       <style>{`
         .create-subtitle {
           font-size: 0.9rem;
-          color: #71717a;
+          color: var(--text-muted);
           margin: -1rem 0 1.5rem;
         }
         .alloc-label {
           font-size: 0.75rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           letter-spacing: 0.06em;
           text-transform: uppercase;
           margin: 0 0 4px;
         }
         .alloc-hint {
           font-size: 0.78rem;
-          color: #52525b;
+          color: var(--text-faint);
           margin: 0 0 10px;
           line-height: 1.4;
         }
@@ -155,7 +155,7 @@ export function CreateHousehold() {
         }
         .alloc-row > * { flex: 1; }
         .alloc-divider {
-          color: #52525b;
+          color: var(--text-faint);
           font-size: 1.2rem;
           padding-top: 1.85rem;
           flex: 0 0 auto;
@@ -168,7 +168,7 @@ export function CreateHousehold() {
         .alloc-pct {
           position: absolute;
           right: 0.75rem;
-          color: #71717a;
+          color: var(--text-muted);
           font-size: 0.875rem;
           pointer-events: none;
         }

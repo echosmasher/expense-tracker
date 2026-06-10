@@ -74,16 +74,16 @@ export function Register() {
           />
         </FormField>
 
-        {errors.general && <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
+        {errors.general && <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{errors.general}</p>}
 
         <Button type="submit" loading={loading} style={{ marginTop: '0.5rem' }}>
           Create account
         </Button>
       </form>
 
-      <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#71717a' }}>
+      <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
         Already have an account?{' '}
-        <Link to="/login" style={{ color: '#818cf8', textDecoration: 'none', fontWeight: 500 }}>
+        <Link to="/login" style={{ color: 'var(--accent-light)', textDecoration: 'none', fontWeight: 500 }}>
           Sign in
         </Link>
       </p>
@@ -91,7 +91,7 @@ export function Register() {
       <style>{`
         .auth-subtitle {
           font-size: 0.9rem;
-          color: #71717a;
+          color: var(--text-muted);
           margin: -1rem 0 1.5rem;
         }
       `}</style>

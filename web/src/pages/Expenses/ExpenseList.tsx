@@ -117,7 +117,7 @@ export function ExpenseList() {
           margin: 0 auto;
           padding: 1.5rem 1rem 2rem;
           font-family: 'Geist', sans-serif;
-          color: #f4f4f5;
+          color: var(--text-primary);
         }
         .list-header {
           display: flex;
@@ -132,7 +132,7 @@ export function ExpenseList() {
           letter-spacing: -0.025em;
         }
         .add-btn {
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 10px;
           color: #fff;
@@ -143,15 +143,15 @@ export function ExpenseList() {
           font-family: inherit;
           transition: background 0.15s;
         }
-        .add-btn:hover { background: #4f46e5; }
+        .add-btn:hover { background: var(--accent-hover); }
         .list-loading, .list-error {
-          color: #71717a;
+          color: var(--text-muted);
           font-size: 0.9rem;
           text-align: center;
           padding: 2rem 0;
           margin: 0;
         }
-        .list-error { color: #f87171; }
+        .list-error { color: var(--danger); }
         .list-empty {
           text-align: center;
           padding: 3rem 0;
@@ -159,12 +159,12 @@ export function ExpenseList() {
         .list-empty-title {
           font-size: 1rem;
           font-weight: 500;
-          color: #a1a1aa;
+          color: var(--text-secondary);
           margin: 0 0 0.4rem;
         }
-        .list-empty-hint { color: #52525b; font-size: 0.875rem; margin: 0 0 1.5rem; }
+        .list-empty-hint { color: var(--text-faint); font-size: 0.875rem; margin: 0 0 1.5rem; }
         .list-empty-cta {
-          background: #6366f1;
+          background: var(--accent);
           border: none;
           border-radius: 10px;
           color: #fff;
@@ -187,19 +187,19 @@ export function ExpenseList() {
           font-weight: 500;
           text-transform: uppercase;
           letter-spacing: 0.06em;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .month-total {
           font-family: 'DM Mono', monospace;
           font-size: 0.8rem;
-          color: #71717a;
+          color: var(--text-muted);
         }
         .expense-list {
           list-style: none;
           margin: 0;
           padding: 0;
-          background: #18181b;
-          border: 1px solid #27272a;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
           border-radius: 14px;
           overflow: hidden;
         }
@@ -208,21 +208,21 @@ export function ExpenseList() {
           align-items: center;
           justify-content: space-between;
           padding: 0.875rem 1rem;
-          border-bottom: 1px solid #1f1f22;
+          border-bottom: 1px solid var(--border-subtle);
           cursor: pointer;
           transition: background 0.1s;
         }
         .expense-item:last-child { border-bottom: none; }
-        .expense-item:hover { background: #1f1f22; }
-        .expense-item:active { background: #27272a; }
+        .expense-item:hover { background: var(--bg-card-hover); }
+        .expense-item:active { background: var(--badge-bg); }
         .expense-left { display: flex; flex-direction: column; gap: 3px; }
-        .expense-store { font-size: 0.9rem; font-weight: 500; color: #f4f4f5; }
-        .expense-purchaser { font-size: 0.78rem; color: #71717a; }
+        .expense-store { font-size: 0.9rem; font-weight: 500; color: var(--text-primary); }
+        .expense-purchaser { font-size: 0.78rem; color: var(--text-muted); }
         .expense-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
         .expense-amount {
           font-family: 'DM Mono', monospace;
           font-size: 0.9rem;
-          color: #f4f4f5;
+          color: var(--text-primary);
           font-weight: 500;
         }
         .status-pill {
@@ -235,18 +235,18 @@ export function ExpenseList() {
         }
         .status-pill--pending_review {
           background: rgba(234,179,8,0.12);
-          color: #fbbf24;
+          color: var(--warning);
           border: 1px solid rgba(234,179,8,0.2);
         }
         .status-pill--confirmed {
           background: rgba(34,197,94,0.1);
-          color: #4ade80;
+          color: var(--success);
           border: 1px solid rgba(34,197,94,0.2);
         }
         .status-pill--settled {
-          background: #27272a;
-          color: #71717a;
-          border: 1px solid #3f3f46;
+          background: var(--badge-bg);
+          color: var(--text-muted);
+          border: 1px solid var(--border-input);
         }
       `}</style>
     </div>
