@@ -332,18 +332,28 @@ router.get('/export', async (req, res, next) => {
 
     const formatNok = (ore: number) => (ore / 100).toFixed(2)
 
+    // Quote a string cell AND neutralize spreadsheet formula injection: a value
+    // beginning with = + - @ (or tab/CR) is evaluated as a formula by Excel and
+    // Sheets, so a malicious store/item name could exfiltrate data or run a
+    // command when the export is opened. Prefix such values with a single quote.
+    const csvCell = (value: string | null | undefined): string => {
+      const raw = value ?? ''
+      const guarded = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
+      return `"${guarded.replace(/"/g, '""')}"`
+    }
+
     const header = 'Date,Store,Purchased by,Card,Item,Quantity,Unit price (kr),Tag,Category,Personal'
     const rows = result.rows.map((r) =>
       [
         r.expense_date?.toString().slice(0, 10) ?? '',
-        `"${(r.store ?? '').replace(/"/g, '""')}"`,
-        `"${r.purchaser_name.replace(/"/g, '""')}"`,
+        csvCell(r.store),
+        csvCell(r.purchaser_name),
         r.card_last_four ? `••• ${r.card_last_four}` : '',
-        `"${r.description.replace(/"/g, '""')}"`,
+        csvCell(r.description),
         r.quantity,
         formatNok(r.unit_price_ore),
-        `"${(r.tag_name ?? '').replace(/"/g, '""')}"`,
-        `"${(r.category_name ?? '').replace(/"/g, '""')}"`,
+        csvCell(r.tag_name),
+        csvCell(r.category_name),
         r.is_personal ? 'Yes' : 'No',
       ].join(',')
     )
