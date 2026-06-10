@@ -6,7 +6,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 
 | Package | Purpose |
 |---------|---------|
-| `backend/` | Express 4 + TypeScript REST API + WebSocket server |
+| `backend/` | Express 4 + TypeScript REST API |
 | `web/` | React 18 + Vite + TailwindCSS web app |
 | `mobile/` | Expo SDK 51 iOS app (React Native) |
 | `shared/` | Settlement calculator + typed API client (shared by web + mobile) |
@@ -20,22 +20,23 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 - **Settlement scope**: snapshot-based (spec 003) — each settlement records the expenses included via `settlement_expenses`; not bound to a calendar month. Statistics still bucket expenses by `expense_date`.
 - **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
-- **Realtime sync**: WebSocket server in `backend/src/ws/server.ts`, household-scoped rooms
 
 ## Project Structure
 
 ```
 backend/src/
+  app.ts           Express app (importable by tests without starting the server)
+  index.ts         HTTP server lifecycle (start, graceful shutdown)
   api/
-    routes/        auth, users, households, receipts, expenses, settlements, projects, statistics
-    middleware/    auth.ts (JWT), error.ts (AppError → JSON)
+    routes/        auth, users, households, receipts, expenses, settlements, projects, statistics, categories
+    middleware/    auth.ts (JWT), error.ts (AppError → JSON), rateLimit.ts
   db/
     client.ts      typed pg wrapper
     migrate.ts     migration runner
     migrations/    001_create_all_tables.sql, 002_create_indexes.sql
-  services/        email.ts, receiptParser.ts, tagMatcher.ts, notifications.ts
+  services/        email.ts, receiptParser.ts, tagMatcher.ts, categorizer.ts, categoryService.ts
   storage/         minio.ts
-  ws/              server.ts
+backend/test/      Vitest + Supertest integration tests (household isolation suite)
 
 web/src/
   pages/
@@ -80,7 +81,19 @@ npm run lint && npm run format:check
 
 # Build all packages
 npm run build
+
+# Run tests (backend needs Postgres on :5432; uses its own expense_tracker_test DB)
+npm test
 ```
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push to master and every PR:
+lint (enforced for backend + shared; web + mobile non-blocking pending lint-debt cleanup),
+build, shared + backend test suites against a Postgres 16 service container, and
+`npm audit --omit=dev` for backend/shared/web (must be clean). Remaining audit findings
+are confined to the Expo SDK 51 / React Native 0.74 toolchain in `mobile/` and only
+clear with an Expo SDK upgrade.
 
 ## Environment Variables
 
