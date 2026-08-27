@@ -1,8 +1,8 @@
 # Server Deployment Guide
 
-Dear Michael
+Dear operator
 
-This guide walks you through deploying the **expense-tracker** app on a Docker host. Marit and I have already wired the project for production deployment — this is just the operational steps.
+This guide walks you through deploying the **expense-tracker** app on a Docker host. The project is already wired for production deployment — this is just the operational steps.
 
 ## What you're deploying
 
@@ -93,7 +93,7 @@ MINIO_ENDPOINT=http://localhost:9000
 # IMPORTANT: this is the URL the BROWSER will use to fetch receipt images.
 # It must be reachable from your phone/laptop, not just from inside Docker.
 # Examples:
-#   http://192.168.1.50:9000        (LAN-only, server's local IP)
+#   http://<server-lan-ip>:9000     (LAN-only, server's local IP)
 #   http://nightmare.local:9000     (if you have mDNS)
 #   https://expenses.yourdomain/storage   (if you front it with a reverse proxy)
 MINIO_PUBLIC_ENDPOINT=http://<server-host-or-ip>:9000
@@ -106,7 +106,7 @@ MINIO_BUCKET=receipts
 JWT_ACCESS_SECRET=<paste from step 2>
 JWT_REFRESH_SECRET=<paste from step 2>
 
-# OpenAI — get from Marit (used to parse receipt photos)
+# OpenAI — used to parse receipt photos
 OPENAI_API_KEY=sk-...
 
 # Resend — for invite emails (or leave as-is and share invite links manually)
@@ -169,12 +169,12 @@ From your phone or laptop, open `http://<server-host-or-ip>/` in a browser. You 
 
 1. Click **Register** and create an account (this becomes the household admin).
 2. Create the household.
-3. Invite Marit using the **Members** screen. The invite email goes via Resend; if you skipped Resend, copy the invite link from the API response and send it manually.
+3. Invite the other household members using the **Members** screen. The invite email goes via Resend; if you skipped Resend, copy the invite link from the API response and send it manually.
 4. Try uploading a receipt to confirm MinIO + signed URLs are working end-to-end. **If receipt images don't load in the browser, `MINIO_PUBLIC_ENDPOINT` is wrong** — fix it in `.env` and re-run `docker compose -f docker-compose.yml up -d` (no rebuild needed; just restart the api container).
 
 ## Updating later
 
-When Marit (or you) push new code to GitHub:
+When new code is pushed to GitHub:
 
 ```bash
 cd ~/apps/expense-tracker
@@ -210,10 +210,10 @@ The data lives in two Docker volumes: `expense-tracker_postgres_data` and `expen
 ```bash
 # Postgres dump
 docker compose -f docker-compose.yml exec -T db \
-  pg_dump -U expense_user expense_tracker | gzip > /home/marit/Documents/Nightmare/Backups/expense-tracker-$(date +%F).sql.gz
+  pg_dump -U expense_user expense_tracker | gzip > <backup-dir>/expense-tracker-$(date +%F).sql.gz
 
 # MinIO objects (rsync from the named volume)
-docker run --rm -v expense-tracker_minio_data:/data -v /home/marit/Documents/Nightmare/Backups:/backup alpine \
+docker run --rm -v expense-tracker_minio_data:/data -v <backup-dir>:/backup alpine \
   tar czf /backup/minio-$(date +%F).tar.gz -C /data .
 ```
 
@@ -236,4 +236,4 @@ The current setup runs HTTP on port 80. If you already have something like Caddy
 | Migrations fail with "database does not exist" | The Postgres container hasn't finished initializing on first run. Wait 15 seconds and re-run the migrate command. |
 | Receipt parsing returns empty items | Check `OPENAI_API_KEY`. The receipt parser falls back to empty on any error. |
 
-If something else breaks, send the output of `docker compose -f docker-compose.yml logs --tail=200` to Marit.
+If something else breaks, capture the output of `docker compose -f docker-compose.yml logs --tail=200`.
