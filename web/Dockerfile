@@ -5,7 +5,12 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY web/package.json ./web/
 # Create stubs for workspaces not present so npm lockfile stays consistent
-RUN mkdir -p backend mobile && echo '{"name":"@expense-tracker/backend","version":"1.0.0","private":true}' > backend/package.json && echo '{"name":"@expense-tracker/mobile","version":"1.0.0","private":true}' > mobile/package.json
+
+# mobile's real deps pin react/@types/react below web's range (Expo SDK 51 =
+# React 18.2), so its stub must keep those pins too - an empty stub lets npm
+# hoist a single, different @types/react for the whole install and breaks
+# web's typecheck (recharts' Legend stops matching web's React types).
+RUN mkdir -p backend mobile && echo '{"name":"@expense-tracker/backend","version":"1.0.0","private":true}' > backend/package.json && echo '{"name":"@expense-tracker/mobile","version":"1.0.0","private":true,"dependencies":{"react":"18.2.0"},"devDependencies":{"@types/react":"~18.2.0"}}' > mobile/package.json
 RUN npm install --legacy-peer-deps
 # Build shared package so web can resolve @expense-tracker/shared
 WORKDIR /app/shared
