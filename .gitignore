@@ -37,3 +37,6 @@ Thumbs.db
 # Temporary
 *.tmp
 *.swp
+
+# Session handoff notes - local scratch, never committed
+HANDOFF.md
