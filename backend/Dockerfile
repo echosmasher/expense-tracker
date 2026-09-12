@@ -24,6 +24,9 @@ FROM base AS build
 COPY backend/ ./backend/
 WORKDIR /app/backend
 RUN npm run build
+# tsc only compiles .ts files - the raw .sql migrations never land in dist/,
+# but migrate.ts resolves MIGRATIONS_DIR relative to its own compiled location.
+RUN cp -r src/db/migrations dist/db/migrations
 
 FROM node:20-alpine AS production
 WORKDIR /app
