@@ -94,6 +94,7 @@ let lineItemA: string
 let settlementA: string
 let transactionA: string
 let projectA: string
+let projectExpenseA: string
 let categoryA: string
 let cardA: string
 
@@ -140,6 +141,16 @@ beforeAll(async () => {
     })
   expect(projectRes.status).toBe(201)
   projectA = projectRes.body.id
+
+  const projectExpenseRes = await request(app)
+    .post(`/api/v1/projects/${projectA}/expenses`)
+    .set('Authorization', `Bearer ${alice.token}`)
+    .send({
+      purchasedBy: alice.id,
+      lineItems: [{ description: 'Lumber', quantity: 1, unitPriceOre: 5_000 }],
+    })
+  expect(projectExpenseRes.status).toBe(201)
+  projectExpenseA = projectExpenseRes.body.id
 
   const catRes = await request(app)
     .get(`/api/v1/households/${householdA}/categories`)
@@ -503,6 +514,74 @@ describe('household isolation: receipts', () => {
         })
     )
     expect(res.status).toBe(403)
+  })
+})
+
+// ─── Receipt and avatar images ────────────────────────────────────────────────
+// Images are served through authenticated API routes rather than expiring
+// signed object-store URLs — this closes the gap where a signed URL outlives
+// the session that minted it. See AUTHORIZATION.md invariant 6.
+
+describe('household isolation: receipt images', () => {
+  it('rejects an unauthenticated request for a household expense receipt', async () => {
+    const res = await request(app).get(`/api/v1/households/${householdA}/expenses/${expenseA}/receipt`)
+    expect(res.status).toBe(401)
+  })
+
+  it('cannot fetch another household’s expense receipt', async () => {
+    const res = await asBob(
+      request(app).get(`/api/v1/households/${householdA}/expenses/${expenseA}/receipt`)
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot fetch a foreign expense receipt through own household URL (ID stuffing)', async () => {
+    const res = await asBob(
+      request(app).get(`/api/v1/households/${householdB}/expenses/${expenseA}/receipt`)
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when the expense has no receipt', async () => {
+    const res = await request(app)
+      .get(`/api/v1/households/${householdA}/expenses/${expenseA}/receipt`)
+      .set('Authorization', `Bearer ${anna.token}`)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('household isolation: project expense receipt images', () => {
+  it('rejects an unauthenticated request for a project expense receipt', async () => {
+    const res = await request(app).get(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}/receipt`)
+    expect(res.status).toBe(401)
+  })
+
+  it('cannot fetch a project expense receipt as a non-member', async () => {
+    const res = await asBob(
+      request(app).get(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}/receipt`)
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 404 when the project expense has no receipt', async () => {
+    const res = await request(app)
+      .get(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}/receipt`)
+      .set('Authorization', `Bearer ${anna.token}`)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('user isolation: avatar', () => {
+  it('rejects an unauthenticated request for an avatar', async () => {
+    const res = await request(app).get('/api/v1/users/me/avatar')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 404 when the caller has no avatar set', async () => {
+    const res = await request(app)
+      .get('/api/v1/users/me/avatar')
+      .set('Authorization', `Bearer ${alice.token}`)
+    expect(res.status).toBe(404)
   })
 })
 

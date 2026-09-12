@@ -28,7 +28,7 @@ interface EditableItem {
 
 // ─── Step 1: Upload ────────────────────────────────────────────────────────────
 
-function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: EditableItem[]) => void }) {
+function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: EditableItem[], previewUrl: string) => void }) {
   const household = useHouseholdStore((s) => s.household)
   const fileRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -53,7 +53,10 @@ function UploadStep({ onParsed }: { onParsed: (result: ParsedReceipt, items: Edi
         categoryId: item.categoryId ?? null,
         categoryName: item.categoryName ?? 'Uncategorized',
       }))
-      onParsed(parsed, items)
+      // Preview the receipt straight from the local file — the just-uploaded
+      // image renders through an authenticated route once it's attached to
+      // an expense, but there's no expense yet at this point in the flow.
+      onParsed(parsed, items, URL.createObjectURL(file))
     } catch (err: any) {
       setError(err?.message ?? 'Failed to parse receipt. Please try again.')
     } finally {
@@ -241,11 +244,13 @@ function CategoryBadge({
 function ReviewStep({
   parsed,
   items,
+  previewUrl,
   onItemsChange,
   onBack,
 }: {
   parsed: ParsedReceipt
   items: EditableItem[]
+  previewUrl: string
   onItemsChange: (items: EditableItem[]) => void
   onBack: () => void
 }) {
@@ -351,11 +356,9 @@ function ReviewStep({
         </select>
       </FormField>
 
-      {parsed.receiptImageUrl && (
-        <a href={parsed.receiptImageUrl} target="_blank" rel="noopener noreferrer" className="receipt-preview-link">
-          <img src={parsed.receiptImageUrl} alt="Receipt" className="receipt-preview" />
-        </a>
-      )}
+      <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="receipt-preview-link">
+        <img src={previewUrl} alt="Receipt" className="receipt-preview" />
+      </a>
 
       {/* Line items */}
       <div className="items-header">
@@ -680,13 +683,19 @@ function ReviewStep({
 export function AddExpense() {
   const [parsed, setParsed] = useState<ParsedReceipt | null>(null)
   const [items, setItems] = useState<EditableItem[]>([])
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
-  if (!parsed) {
+  useEffect(() => {
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }
+  }, [previewUrl])
+
+  if (!parsed || !previewUrl) {
     return (
       <UploadStep
-        onParsed={(result, editableItems) => {
+        onParsed={(result, editableItems, url) => {
           setParsed(result)
           setItems(editableItems)
+          setPreviewUrl(url)
         }}
       />
     )
@@ -696,8 +705,9 @@ export function AddExpense() {
     <ReviewStep
       parsed={parsed}
       items={items}
+      previewUrl={previewUrl}
       onItemsChange={setItems}
-      onBack={() => setParsed(null)}
+      onBack={() => { setParsed(null); setPreviewUrl(null) }}
     />
   )
 }

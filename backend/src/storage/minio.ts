@@ -1,36 +1,28 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { GetObjectCommand } from '@aws-sdk/client-s3'
+import type { Readable } from 'node:stream'
 
 const BUCKET = process.env.MINIO_BUCKET ?? 'receipts'
 const INTERNAL_ENDPOINT = process.env.MINIO_ENDPOINT ?? 'http://localhost:9000'
-// MINIO_PUBLIC_ENDPOINT is what the browser uses; falls back to internal when unset (dev).
-const PUBLIC_ENDPOINT = process.env.MINIO_PUBLIC_ENDPOINT ?? INTERNAL_ENDPOINT
 
 const credentials = {
   accessKeyId: process.env.MINIO_ACCESS_KEY ?? '',
   secretAccessKey: process.env.MINIO_SECRET_KEY ?? '',
 }
 
-// Used for server→MinIO traffic (uploads, bucket admin) over the Docker network.
+// The object store is never reachable from outside the Docker network — every
+// image request goes through an authenticated API route that streams the
+// object server-side, so only this internal client is needed.
 const s3 = new S3Client({
   endpoint: INTERNAL_ENDPOINT,
   region: 'us-east-1', // MinIO ignores this but AWS SDK requires it
   credentials,
   forcePathStyle: true, // required for MinIO
-})
-
-// Used only to mint presigned URLs that the browser can resolve.
-const s3Public = new S3Client({
-  endpoint: PUBLIC_ENDPOINT,
-  region: 'us-east-1',
-  credentials,
-  forcePathStyle: true,
 })
 
 /** Ensure the receipts bucket exists (call once on startup). */
@@ -63,17 +55,16 @@ export async function uploadFile(
   return key
 }
 
-/**
- * Generate a signed URL for a receipt image.
- * @param expirySeconds - Default 1 hour (3600s). Receipt images are never publicly accessible.
- */
-export async function getReceiptUrl(
-  key: string,
-  expirySeconds = 3600
-): Promise<string> {
-  return getSignedUrl(
-    s3Public,
-    new GetObjectCommand({ Bucket: BUCKET, Key: key }),
-    { expiresIn: expirySeconds }
-  )
+export interface StoredObject {
+  body: Readable
+  contentType: string
+}
+
+/** Fetch an object's bytes for the API to stream back to an authenticated caller. */
+export async function getObject(key: string): Promise<StoredObject> {
+  const result = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }))
+  return {
+    body: result.Body as Readable,
+    contentType: result.ContentType ?? 'application/octet-stream',
+  }
 }

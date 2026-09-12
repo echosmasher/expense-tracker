@@ -5,6 +5,7 @@ import type { UserProfile, UserPreferences } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { Button } from '../../components/Button'
 import { FormField, Input } from '../../components/FormField'
+import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage'
 
 /** Apply a theme to the document and persist it for the next load. */
 function applyTheme(theme: 'light' | 'dark') {
@@ -26,6 +27,16 @@ function AvatarSection({
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The fetched avatar URL doesn't change on re-upload (same API path), so a
+  // freshly uploaded file is previewed straight from its local bytes instead
+  // of waiting on a refetch.
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null)
+  const fetchedUrl = useAuthenticatedImage(avatarUrl)
+  const displayUrl = localPreviewUrl ?? fetchedUrl
+
+  useEffect(() => {
+    return () => { if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl) }
+  }, [localPreviewUrl])
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -34,6 +45,7 @@ function AvatarSection({
     setError(null)
     try {
       const result = await users.uploadAvatar(file)
+      setLocalPreviewUrl(URL.createObjectURL(file))
       onUploaded(result.avatarUrl)
     } catch (err: any) {
       setError(err?.message ?? 'Upload failed')
@@ -48,8 +60,8 @@ function AvatarSection({
       <h2 className="ps-section-title">Profile picture</h2>
       <div className="avatar-row">
         <div className="avatar-preview" onClick={() => fileRef.current?.click()}>
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="Avatar" className="avatar-img" />
+          {displayUrl ? (
+            <img src={displayUrl} alt="Avatar" className="avatar-img" />
           ) : (
             <span className="avatar-initial">{name.charAt(0).toUpperCase()}</span>
           )}

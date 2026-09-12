@@ -83,6 +83,29 @@ async function request<T>(
   return res.json() as Promise<T>
 }
 
+/**
+ * Authenticated fetch for image sources — receipts and avatars render through
+ * API routes rather than a plain <img src>, so callers build an object URL
+ * from the returned blob.
+ */
+export async function fetchImage(path: string, retry = true): Promise<Blob> {
+  const headers = new Headers()
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+
+  const res = await fetch(apiUrl(path), { headers, credentials: 'include' })
+
+  if (res.status === 401 && retry) {
+    await refreshToken()
+    return fetchImage(path, false)
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, 'IMAGE_FETCH_FAILED', 'Failed to load image')
+  }
+
+  return res.blob()
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -207,7 +230,6 @@ export const households = {
 
 export interface ParsedReceipt {
   receiptImageKey: string
-  receiptImageUrl: string
   store: string | null
   date: string | null
   detectedCardLastFour: string | null

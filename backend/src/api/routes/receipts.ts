@@ -2,7 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
-import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
+import { uploadFile } from '../../storage/minio.js'
 import { parseReceipt } from '../../services/receiptParser.js'
 import { sanitizeImage } from '../../services/imageSanitizer.js'
 import { categorizeLineItems } from '../../services/categoryService.js'
@@ -81,12 +81,8 @@ router.post('/parse', receiptParseLimiter, upload.single('receipt'), async (req,
       parsed.items.map((item) => ({ description: item.description }))
     )
 
-    // Generate signed URL for the uploaded receipt
-    const receiptImageUrl = await getReceiptUrl(key)
-
     res.json({
       receiptImageKey: key,
-      receiptImageUrl,
       store: parsed.store,
       date: parsed.date,
       detectedCardLastFour: matchedCardLastFour,

@@ -24,7 +24,6 @@ const ConfigSchema = z.object({
     ),
 
   MINIO_ENDPOINT: z.string().url().default('http://localhost:9000'),
-  MINIO_PUBLIC_ENDPOINT: z.string().url().optional(),
   MINIO_ACCESS_KEY: z.string().min(1, 'MINIO_ACCESS_KEY is required'),
   MINIO_SECRET_KEY: z
     .string()

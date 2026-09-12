@@ -49,6 +49,9 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 | Categories: list | ✗ | ✗ | ✓ ✓test | ✓ | ✓ |
 | Categories: rename / delete | ✗ | ✗ | ✗ ✓test | ✗ | ✓; system categories immutable (400) |
 | `POST /receipts/parse?householdId=` | ✗ | ✗ membership checked **before** upload/AI call ✓test | ✓ | ✓ | ✓ |
+| `GET /households/:id/expenses/:id/receipt` | ✗ ✓test | ✗ | ✗ ✓test | ✓ household-scoped ✓test; 404 if the expense has no receipt | ✓ |
+| `GET /projects/:id/expenses/:id/receipt` | ✗ ✓test | ✗ project member only ✓test; 404 if the expense has no receipt | | | |
+| `GET /users/me/avatar` | ✗ ✓test | ✓ self only ✓test; 404 if no avatar set | | | |
 
 ## Invariants worth stating explicitly
 
@@ -62,3 +65,8 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 4. **Allocation keys must sum to exactly 10,000 bp** at creation and update.
 5. The only unauthenticated mutating endpoints are `register` and `accept-invite`,
    both rate-limited.
+6. **Image access does not expire.** Receipt and avatar bytes are streamed through the API
+   under the same authorization check as the resource they belong to — there is no bearer
+   URL that outlives the session that fetched it. Every image response carries
+   `Cache-Control: private, no-store` so a shared cache or proxy cannot serve one user's
+   image to another.

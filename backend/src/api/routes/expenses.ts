@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { db } from '../../db/client.js'
-import { getReceiptUrl } from '../../storage/minio.js'
+import { streamImage } from '../streamImage.js'
 import { tagLineItems } from '../../services/tagMatcher.js'
 
 const router = Router({ mergeParams: true })
@@ -219,6 +219,27 @@ router.get('/:expenseId', async (req, res, next) => {
   }
 })
 
+// ─── GET /households/:householdId/expenses/:expenseId/receipt ────────────────
+
+router.get('/:expenseId/receipt', async (req, res, next) => {
+  try {
+    const { householdId, expenseId } = req.params as { householdId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+
+    const result = await db.query<{ receipt_image_key: string | null }>(
+      'SELECT receipt_image_key FROM expenses WHERE id = $1 AND household_id = $2',
+      [expenseId, householdId]
+    )
+    const key = result.rows[0]?.receipt_image_key
+    if (!key) throw new AppError(404, 'RECEIPT_NOT_FOUND', 'This expense has no receipt')
+
+    await streamImage(res, key)
+  } catch (err) {
+    next(err)
+  }
+})
+
 // ─── POST /households/:householdId/expenses/:expenseId/confirm ───────────────
 
 router.post('/:expenseId/confirm', async (req, res, next) => {
@@ -380,14 +401,9 @@ async function getFullExpense(expenseId: string, householdId: string) {
     [expenseId]
   )
 
-  let receiptImageUrl: string | null = null
-  if (expense.receipt_image_key) {
-    try {
-      receiptImageUrl = await getReceiptUrl(expense.receipt_image_key)
-    } catch {
-      // signed URL generation failure is non-fatal
-    }
-  }
+  const receiptImageUrl = expense.receipt_image_key
+    ? `/households/${householdId}/expenses/${expenseId}/receipt`
+    : null
 
   return {
     id: expense.id,

@@ -5,8 +5,9 @@ import { z } from 'zod'
 import { db } from '../../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
-import { uploadFile, getReceiptUrl } from '../../storage/minio.js'
+import { uploadFile } from '../../storage/minio.js'
 import { sanitizeImage } from '../../services/imageSanitizer.js'
+import { streamImage } from '../streamImage.js'
 
 const router = Router()
 const BCRYPT_ROUNDS = 12
@@ -46,10 +47,7 @@ async function fetchProfile(userId: string) {
     [userId]
   )
 
-  let avatarUrl: string | null = null
-  if (user.avatar_key) {
-    avatarUrl = await getReceiptUrl(user.avatar_key, 3600)
-  }
+  const avatarUrl = user.avatar_key ? '/users/me/avatar' : null
 
   return {
     id: user.id,
@@ -143,8 +141,24 @@ router.post('/me/avatar', avatarUpload.single('avatar'), async (req, res, next) 
 
     await db.query('UPDATE users SET avatar_key = $1, updated_at = now() WHERE id = $2', [key, userId])
 
-    const avatarUrl = await getReceiptUrl(key, 3600)
-    res.json({ avatarUrl })
+    res.json({ avatarUrl: '/users/me/avatar' })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /users/me/avatar ────────────────────────────────────────────────────
+router.get('/me/avatar', async (req, res, next) => {
+  try {
+    const userId = req.user!.userId
+    const result = await db.query<{ avatar_key: string | null }>(
+      'SELECT avatar_key FROM users WHERE id = $1',
+      [userId]
+    )
+    const key = result.rows[0]?.avatar_key
+    if (!key) throw new AppError(404, 'AVATAR_NOT_FOUND', 'No avatar set')
+
+    await streamImage(res, key)
   } catch (err) {
     next(err)
   }

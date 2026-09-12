@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db } from '../../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
+import { streamImage } from '../streamImage.js'
 import { calculateSettlement } from '@expense-tracker/shared'
 
 const router = Router({ mergeParams: true })
@@ -285,6 +286,27 @@ projectDetailRouter.get('/expenses', async (req, res, next) => {
       [projectId]
     )
     res.json({ expenses: result.rows })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /projects/:projectId/expenses/:expenseId/receipt ────────────────────
+
+projectDetailRouter.get('/expenses/:expenseId/receipt', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    const result = await db.query<{ receipt_image_key: string | null }>(
+      'SELECT receipt_image_key FROM expenses WHERE id = $1 AND project_id = $2',
+      [expenseId, projectId]
+    )
+    const key = result.rows[0]?.receipt_image_key
+    if (!key) throw new AppError(404, 'RECEIPT_NOT_FOUND', 'This expense has no receipt')
+
+    await streamImage(res, key)
   } catch (err) {
     next(err)
   }

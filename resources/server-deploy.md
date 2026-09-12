@@ -13,7 +13,7 @@ A self-hosted shared expense tracker for two people. Four Docker services come u
 | `web` | React app served by nginx, also reverse-proxies `/api/` and `/ws` to the backend | `${WEB_PORT:-80}` published on the host |
 | `api` | Express backend (Node 20) | internal only |
 | `db` | PostgreSQL 16 | internal only |
-| `storage` | MinIO (S3-compatible, stores receipt images) | `${MINIO_PUBLIC_PORT:-9000}` published on the host |
+| `storage` | MinIO (S3-compatible, stores receipt images) | internal only — images render through the API |
 
 Volumes `postgres_data` and `minio_data` are created by Docker on the host's local disk — that's where the actual data lives.
 
@@ -88,16 +88,9 @@ POSTGRES_USER=expense_user
 POSTGRES_PASSWORD=<paste from step 2>
 DATABASE_URL=postgres://expense_user:<same password>@localhost:5432/expense_tracker
 
-# MinIO
+# MinIO — internal only. The browser never talks to it directly; receipt and
+# avatar images render through authenticated API routes instead.
 MINIO_ENDPOINT=http://localhost:9000
-# IMPORTANT: this is the URL the BROWSER will use to fetch receipt images.
-# It must be reachable from your phone/laptop, not just from inside Docker.
-# Examples:
-#   http://<server-lan-ip>:9000     (LAN-only, server's local IP)
-#   http://nightmare.local:9000     (if you have mDNS)
-#   https://expenses.yourdomain/storage   (if you front it with a reverse proxy)
-MINIO_PUBLIC_ENDPOINT=http://<server-host-or-ip>:9000
-MINIO_PUBLIC_PORT=9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=<paste from step 2>
 MINIO_BUCKET=receipts
@@ -170,7 +163,7 @@ From your phone or laptop, open `http://<server-host-or-ip>/` in a browser. You 
 1. Click **Register** and create an account (this becomes the household admin).
 2. Create the household.
 3. Invite the other household members using the **Members** screen. The invite email goes via Resend; if you skipped Resend, copy the invite link from the API response and send it manually.
-4. Try uploading a receipt to confirm MinIO + signed URLs are working end-to-end. **If receipt images don't load in the browser, `MINIO_PUBLIC_ENDPOINT` is wrong** — fix it in `.env` and re-run `docker compose -f docker-compose.yml up -d` (no rebuild needed; just restart the api container).
+4. Try uploading a receipt to confirm MinIO is working end-to-end — the image renders via the API, not a direct MinIO URL. If it doesn't load, check `docker compose logs api`.
 
 ## Updating later
 
@@ -224,15 +217,14 @@ Drop those into a cron job if you want them automated.
 The current setup runs HTTP on port 80. If you already have something like Caddy / Traefik / nginx-proxy-manager on this host, point it at the `web` container (or at host `:80`) and add TLS there. If you front the app with a domain over HTTPS, also update:
 
 - `APP_URL=https://your-domain` in `.env`
-- `MINIO_PUBLIC_ENDPOINT` to a route that's served over HTTPS (e.g. proxy `/storage/` through the same reverse proxy to the `storage` service on port 9000, and set the env var to `https://your-domain/storage`)
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
 | Web loads but API calls hang or 502 | The `api` container isn't healthy. Check `docker compose logs api`. Common cause: missing/incorrect `JWT_*` or `DATABASE_URL` in `.env`. |
-| Login works but receipt images don't load (broken-image icons) | `MINIO_PUBLIC_ENDPOINT` is wrong, or the host's port 9000 is firewalled, or signed URL signature mismatch. From your browser, try opening one of the receipt URLs directly — the error from MinIO usually tells you what's wrong. |
-| `docker compose up` fails with "port is already allocated" | Something else on the host is using port 80 or 9000. Set `WEB_PORT` and/or `MINIO_PUBLIC_PORT` in `.env` to free ports. |
+| Login works but receipt images don't load (broken-image icons) | Images render through the API, not MinIO directly — check `docker compose logs api` for the authorization or storage error. |
+| `docker compose up` fails with "port is already allocated" | Something else on the host is using port 80. Set `WEB_PORT` in `.env` to free it. |
 | Migrations fail with "database does not exist" | The Postgres container hasn't finished initializing on first run. Wait 15 seconds and re-run the migrate command. |
 | Receipt parsing returns empty items | Check `OPENAI_API_KEY`. The receipt parser falls back to empty on any error. |
 

@@ -11,7 +11,7 @@ Four Docker services come up together via `docker-compose.yml`:
 | Service | Image | Purpose | Internal port |
 |---|---|---|---|
 | `db` | `postgres:16-alpine` | Application database | 5432 |
-| `storage` | `minio:RELEASE.2025-09-07T16-13-09Z` | Receipt image storage (S3-compatible) | 9000 / 9001 console |
+| `storage` | `minio:RELEASE.2025-09-07T16-13-09Z` | Receipt image storage (S3-compatible), internal-only | 9000 / 9001 console (neither published on the host) |
 | `api` | built from `backend/Dockerfile` | Express + WebSocket server | 3001 |
 | `web` | built from `web/Dockerfile` | nginx serving the React bundle + proxying `/api` to `api` | 80 |
 
@@ -104,8 +104,6 @@ openssl rand -base64 32
 | `DATABASE_URL` | `postgres://expense_user:<password>@db:5432/expense_tracker` | Hostname is `db` (Docker service name), not `localhost` |
 | `MINIO_ACCESS_KEY` | `minioadmin` or stronger | |
 | `MINIO_SECRET_KEY` | `<openssl rand>` | ≥8 chars |
-| `MINIO_PUBLIC_ENDPOINT` | `https://tracker.yourdomain.no/storage` or a separate `https://storage.yourdomain.no` | This is what the **browser** uses to fetch signed image URLs — it must be reachable from users' devices, NOT from inside Docker. If you don't expose MinIO publicly, set up a path-based proxy through nginx/Caddy. |
-| `MINIO_PUBLIC_PORT` | `9000` or omit if proxied through 443 | |
 | `JWT_ACCESS_SECRET` | `<openssl rand -hex 64>` | If you rotate this, all sessions invalidate |
 | `OPENAI_API_KEY` | `sk-...` | From platform.openai.com |
 | `RESEND_API_KEY` | `re_...` | From resend.com |
@@ -142,14 +140,13 @@ Re-run this after any future deploy that adds files to `backend/src/db/migration
 
 ## Step 8 — Create the MinIO bucket
 
-The `receipts` bucket is what the app uploads to. Compose doesn't create it. Either:
+The `receipts` bucket is what the app uploads to. Compose doesn't create it, and the base
+compose file publishes no MinIO port on the host — run this from inside the container:
 
-- Visit `https://<host>:9001` (MinIO console), log in with `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`, create a bucket named `receipts`.
-- Or run from the host:
-  ```bash
-  docker compose exec storage mc alias set local http://localhost:9000 "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"
-  docker compose exec storage mc mb local/receipts
-  ```
+```bash
+docker compose exec storage mc alias set local http://localhost:9000 "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY"
+docker compose exec storage mc mb local/receipts
+```
 
 ## Step 9 — Create the first user
 
@@ -194,7 +191,7 @@ the `api` container with the new environment) unless noted otherwise.
 |--------|---------------|------------------------------|
 | `JWT_ACCESS_SECRET` | `openssl rand -hex 64` → replace → `docker compose up -d api` | All **access** tokens become invalid immediately. Users don't notice: the browser silently fetches a new one via `/auth/refresh` (refresh tokens are stored in Postgres, not signed by this secret, so sessions survive). |
 | `POSTGRES_PASSWORD` | Change the role password **first**, then update `.env` (the `DATABASE_URL` embeds it), then restart: <br>`docker compose exec db psql -U "$POSTGRES_USER" -c "ALTER USER \"$POSTGRES_USER\" PASSWORD 'new';"` <br>then edit `.env` → `docker compose up -d` | Brief: the API can't reach the DB between the `ALTER` and the restart. Do them back-to-back. |
-| `MINIO_SECRET_KEY` / `MINIO_ACCESS_KEY` | Rotate the key in MinIO (console or `mc admin user svcacct`), update `.env`, `docker compose up -d` | Previously issued signed receipt URLs (1h TTL) keep working until they expire; new ones use the new key. |
+| `MINIO_SECRET_KEY` / `MINIO_ACCESS_KEY` | Rotate the key in MinIO (console or `mc admin user svcacct`), update `.env`, `docker compose up -d` | The API is the only client of MinIO — restarting it picks up the new key immediately. Image access goes through the API's own session auth, so there's no signed-URL cache to worry about. |
 | `OPENAI_API_KEY` | Revoke + recreate at platform.openai.com, update `.env`, `docker compose up -d api` | Receipt parsing fails until the new key is live — it degrades gracefully (empty items, hand-entry still works), so no data loss. |
 | `RESEND_API_KEY` | Revoke + recreate at resend.com, update `.env`, `docker compose up -d api` | Invite + settlement emails fail to send until the new key is live. In-app flows are unaffected. |
 
@@ -227,7 +224,7 @@ If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step pi
 | Invite emails not arriving | `docker compose logs api \| grep -i resend`. Also check the Resend dashboard for delivery logs. Common cause: domain not yet verified or `EMAIL_FROM` not on the verified domain. |
 | Settlement triggers but transaction "Mark paid" fails | `docker compose logs api` near the request time. Spec 003 changed the close handler; if you see `column does not exist`, you're missing migration 008. |
 | Receipt upload "AI parse failed" | Either `OPENAI_API_KEY` invalid/out of credits, or the 15s timeout fired. Logs in `api` will show which. The app falls back to empty line items — user can fill them in manually. |
-| Image thumbnails 403 / signature mismatch | `MINIO_PUBLIC_ENDPOINT` is wrong. It must be the URL the **browser** uses, not the internal Docker URL. |
+| Receipt/avatar images 403 or 404 | Images render through the API (`GET .../receipt`, `GET /users/me/avatar`), not MinIO directly. Check `docker compose logs api` for the actual authorization failure. |
 | "client password must be a string" on `npm run migrate:prod` | `.env` not loaded. Should not happen via `docker compose exec api npm run migrate:prod` (env vars come from the container). |
 
 ## Operational notes specific to this build

@@ -4,6 +4,7 @@ import { expenses, categories } from '@expense-tracker/shared'
 import type { Expense, CategoryInfo } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
+import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage'
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
@@ -173,6 +174,7 @@ export function ExpenseDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const receiptObjectUrl = useAuthenticatedImage(expense?.receiptImageUrl)
 
   useEffect(() => {
     if (!household || !expenseId) return
@@ -230,9 +232,9 @@ export function ExpenseDetail() {
             <div className="detail-total">{formatNok(expense.totalAmountOre)}</div>
           </div>
 
-          {expense.receiptImageUrl && (
-            <a href={expense.receiptImageUrl} target="_blank" rel="noopener noreferrer">
-              <img src={expense.receiptImageUrl} alt="Receipt" className="detail-receipt-img" />
+          {receiptObjectUrl && (
+            <a href={receiptObjectUrl} target="_blank" rel="noopener noreferrer">
+              <img src={receiptObjectUrl} alt="Receipt" className="detail-receipt-img" />
             </a>
           )}
 
