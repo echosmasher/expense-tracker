@@ -32,9 +32,7 @@ COPY shared/ ./shared/
 COPY backend/package.json ./backend/
 RUN mkdir -p web mobile && echo '{"name":"@expense-tracker/web","version":"1.0.0","private":true,"dependencies":{"react":"^18.3.0","react-dom":"^18.3.0"}}' > web/package.json && echo '{"name":"@expense-tracker/mobile","version":"1.0.0","private":true}' > mobile/package.json
 RUN npm install --omit=dev --legacy-peer-deps
-WORKDIR /app/shared
-RUN ../node_modules/.bin/tsc
-WORKDIR /app
+COPY --from=build /app/shared/dist ./shared/dist
 COPY --from=build /app/backend/dist ./backend/dist
 WORKDIR /app/backend
 EXPOSE 3001
