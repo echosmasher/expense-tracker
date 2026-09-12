@@ -25,7 +25,7 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 
 | Resource / operation | Anonymous | User | Member | Active member | Admin |
 |---|---|---|---|---|---|
-| `POST /auth/register`, `/auth/login` | ✓ (rate-limited 20/15min) ✓test | — | — | — | — |
+| `POST /auth/login` | ✓ (rate-limited 20/15min) ✓test | — | — | — | — |
 | `POST /auth/refresh`, `/auth/logout` | ✓ with valid refresh cookie ✓test | | | | |
 | `GET /auth/invite-info`, `POST /auth/accept-invite` | ✓ with unexpired, unused invite token ✓test | | | | |
 | `GET/PATCH /users/me`, preferences, avatar | ✗ | ✓ self only | | | |
@@ -63,8 +63,9 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 3. **Invite tokens are bearer credentials but email-bound**: acceptance creates/joins the
    account for `invite.email` only — a forwarded link cannot join an attacker's own address.
 4. **Allocation keys must sum to exactly 10,000 bp** at creation and update.
-5. The only unauthenticated mutating endpoints are `register` and `accept-invite`,
-   both rate-limited.
+5. The only unauthenticated mutating endpoint is `accept-invite`, which is rate-limited.
+   Accounts otherwise exist only by invitation or by the host-side `create-user` command
+   (`backend/src/cli/create-user.ts`) — there is no public registration route.
 6. **Image access does not expire.** Receipt and avatar bytes are streamed through the API
    under the same authorization check as the resource they belong to — there is no bearer
    URL that outlives the session that fetched it. Every image response carries

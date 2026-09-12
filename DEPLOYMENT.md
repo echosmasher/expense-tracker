@@ -150,12 +150,19 @@ docker compose exec storage mc mb local/receipts
 
 ## Step 9 — Create the first user
 
-There is no admin seed user. Register through the UI:
+There is no public registration route — accounts exist only by invitation, and the very first
+account has no inviter. Create it from the host:
 
-1. Open `https://tracker.yourdomain.no` in a browser.
-2. Click **Register** — create your account.
-3. Create a household (`/create-household`). The creator is automatically the admin.
-4. Invite your household members via the Settings page. They get an email with an accept-invite link.
+```bash
+docker compose exec api node dist/cli/create-user.js --email you@yourdomain.no --name "Your Name"
+```
+
+You'll be prompted for a password (typed, not echoed, never passed as an argument). The command
+refuses if the email already exists.
+
+1. Open `https://tracker.yourdomain.no` and log in with that email and password.
+2. Create a household (`/create-household`). The creator is automatically the admin.
+3. Invite your household members via the Settings page. They get an email with an accept-invite link.
 
 ## Step 10 — Backups
 

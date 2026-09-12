@@ -7,6 +7,7 @@
 // open settlement, and a project. "intruder" is the admin of household B.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
+import bcrypt from 'bcrypt'
 
 // Email goes out on settlement creation; never hit the network from tests.
 vi.mock('../src/services/email.js', () => ({
@@ -23,12 +24,19 @@ interface TestUser {
   token: string
 }
 
+/** Accounts are invite-only; tests create users directly (the way the host-side
+ * create-user CLI does) rather than through a network route. */
 async function registerUser(name: string, email: string): Promise<TestUser> {
-  const res = await request(app)
-    .post('/api/v1/auth/register')
-    .send({ email, password: 'correct-horse-battery', name })
-  expect(res.status).toBe(201)
-  return { id: res.body.user.id, email, token: res.body.accessToken }
+  const passwordHash = await bcrypt.hash('correct-horse-battery', 12)
+  const insert = await db.query<{ id: string }>(
+    'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id',
+    [email, passwordHash, name]
+  )
+  const login = await request(app)
+    .post('/api/v1/auth/login')
+    .send({ email, password: 'correct-horse-battery' })
+  expect(login.status).toBe(200)
+  return { id: insert.rows[0]!.id, email, token: login.body.accessToken }
 }
 
 /** Create a household via the API, then add a second member directly in the

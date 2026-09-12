@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcrypt'
 
 vi.mock('../src/services/email.js', () => ({
   sendInviteEmail: vi.fn(async () => {}),
@@ -28,12 +29,19 @@ function refreshCookieOf(res: request.Response): string {
   return cookie!.split(';')[0]!
 }
 
-async function register(name: string, email: string) {
-  const res = await request(app)
-    .post('/api/v1/auth/register')
-    .send({ email, password: PASSWORD, name })
-  expect(res.status).toBe(201)
-  return { id: res.body.user.id as string, email, token: res.body.accessToken as string, res }
+/** Accounts are invite-only now; tests create users directly, the same way the
+ * host-side create-user CLI does, rather than through a network route. */
+async function createUser(name: string, email: string) {
+  const passwordHash = await bcrypt.hash(PASSWORD, 12)
+  const result = await db.query<{ id: string }>(
+    'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id',
+    [email, passwordHash, name]
+  )
+  const id = result.rows[0]!.id
+
+  const login = await request(app).post('/api/v1/auth/login').send({ email, password: PASSWORD })
+  expect(login.status).toBe(200)
+  return { id, email, token: login.body.accessToken as string }
 }
 
 /** The invite token only exists in the email — pull it from the mock. */
@@ -55,8 +63,8 @@ beforeAll(async () => {
     `TRUNCATE TABLE ${tables.rows.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`
   )
 
-  admin = await register('Admin', 'admin@auth.example')
-  member = await register('Member', 'member@auth.example')
+  admin = await createUser('Admin', 'admin@auth.example')
+  member = await createUser('Member', 'member@auth.example')
 
   const hhRes = await request(app)
     .post('/api/v1/households')
@@ -73,15 +81,33 @@ afterAll(async () => {
 // ─── Registration ─────────────────────────────────────────────────────────────
 
 describe('registration', () => {
-  it('returns an access token and sets an httpOnly refresh cookie', async () => {
+  it('the register route no longer exists', async () => {
     const res = await request(app)
       .post('/api/v1/auth/register')
       .send({ email: 'fresh@auth.example', password: PASSWORD, name: 'Fresh' })
-    expect(res.status).toBe(201)
-    expect(res.body.accessToken).toBeTruthy()
-    expect(res.body.user.email).toBe('fresh@auth.example')
+    expect(res.status).toBe(404)
+  })
+
+  it('a login-issued access token works against protected routes', async () => {
+    const res = await request(app)
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${admin.token}`)
+    expect(res.status).toBe(200)
+    expect(res.body.id).toBe(admin.id)
     // Password material must never leak in the response.
     expect(JSON.stringify(res.body)).not.toMatch(/password|hash/i)
+  })
+})
+
+// ─── Login ────────────────────────────────────────────────────────────────────
+
+describe('login', () => {
+  it('succeeds with correct credentials and sets an httpOnly refresh cookie', async () => {
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: admin.email, password: PASSWORD })
+    expect(res.status).toBe(200)
+    expect(res.body.accessToken).toBeTruthy()
 
     const cookie: string = (res.headers['set-cookie'] as unknown as string[]).find((c: string) =>
       c.startsWith('refresh_token=')
@@ -89,49 +115,6 @@ describe('registration', () => {
     expect(cookie).toContain('HttpOnly')
     expect(cookie).toContain('SameSite=Strict')
     expect(cookie).toContain('Path=/api/v1/auth')
-  })
-
-  it('the issued access token works against protected routes', async () => {
-    const res = await request(app)
-      .get('/api/v1/users/me')
-      .set('Authorization', `Bearer ${admin.token}`)
-    expect(res.status).toBe(200)
-    expect(res.body.id).toBe(admin.id)
-  })
-
-  it('rejects a duplicate email with 409', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/register')
-      .send({ email: admin.email, password: PASSWORD, name: 'Imposter' })
-    expect(res.status).toBe(409)
-    expect(res.body.error.code).toBe('EMAIL_ALREADY_EXISTS')
-  })
-
-  it('rejects a password shorter than 8 chars', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/register')
-      .send({ email: 'short@auth.example', password: 'short', name: 'Short' })
-    expect(res.status).toBe(400)
-  })
-
-  it('rejects an invalid email', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/register')
-      .send({ email: 'not-an-email', password: PASSWORD, name: 'Bad' })
-    expect(res.status).toBe(400)
-  })
-})
-
-// ─── Login ────────────────────────────────────────────────────────────────────
-
-describe('login', () => {
-  it('succeeds with correct credentials', async () => {
-    const res = await request(app)
-      .post('/api/v1/auth/login')
-      .send({ email: admin.email, password: PASSWORD })
-    expect(res.status).toBe(200)
-    expect(res.body.accessToken).toBeTruthy()
-    refreshCookieOf(res)
   })
 
   it('rejects a wrong password', async () => {

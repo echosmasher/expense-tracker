@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation, Link, type Location } from 'react-router-dom'
+import { useNavigate, useLocation, type Location } from 'react-router-dom'
 import { auth } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { AuthShell } from '../../components/AuthShell'
@@ -71,13 +71,6 @@ export function Login() {
           Sign in
         </Button>
       </form>
-
-      <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-        Don't have an account?{' '}
-        <Link to="/register" style={{ color: 'var(--accent-light)', textDecoration: 'none', fontWeight: 500 }}>
-          Create one
-        </Link>
-      </p>
 
       <style>{`
         .auth-subtitle {

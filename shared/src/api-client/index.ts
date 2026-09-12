@@ -125,9 +125,6 @@ export interface LoginResponse {
 }
 
 export const auth = {
-  register: (body: { email: string; password: string; name: string }) =>
-    request<LoginResponse>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-
   login: (body: { email: string; password: string }) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 

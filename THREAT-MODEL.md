@@ -50,6 +50,7 @@ third-party API keys.
 | T8 | **Invite abuse** | Tokens are random 32-byte, sha256-hashed, 7-day expiry, single-use, bound to the invited email | A leaked unexpired token is usable by anyone until it's accepted (then closed) |
 | T9 | **Supply chain** | `npm ci` from committed lockfile; `npm audit --omit=dev` gates every workspace in CI | No SBOM/pinned digests |
 | T10 | **DoS** | Per-IP rate limits on auth and receipt-parse; 1 MB JSON body cap | No global request quota; a valid member can issue unbounded normal API calls |
+| T11 | **Public account creation** — a stranger reaching the public hostname signs up and spends the household's OpenAI credit or pollutes the ledger | There is no registration route or page; accounts are created only via `accept-invite` (email-bound, single-use, expiring token) or the `create-user` CLI run on the host (`docker compose exec api node dist/cli/create-user.js`), never over the network | An admin who issues an invite to the wrong address hands that address account creation; invites still expire in 7 days and are single-use |
 
 ## Out of scope
 

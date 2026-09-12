@@ -7,7 +7,6 @@ import { AppShell } from './components/AppShell'
 import { SplashScreen } from './components/SplashScreen'
 
 // Auth
-import { Register } from './pages/Auth/Register'
 import { Login } from './pages/Auth/Login'
 import { AcceptInvite } from './pages/Auth/AcceptInvite'
 
@@ -74,7 +73,6 @@ export function App() {
       <SessionGate>
         <Routes>
           {/* Public auth routes */}
-          <Route path="/register" element={<RequireGuest><Register /></RequireGuest>} />
           <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />
           <Route path="/accept-invite" element={<AcceptInvite />} />
 

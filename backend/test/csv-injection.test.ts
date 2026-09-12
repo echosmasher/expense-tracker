@@ -3,6 +3,7 @@
 // formula when the file is opened in Excel or Google Sheets.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
+import bcrypt from 'bcrypt'
 
 vi.mock('../src/services/email.js', () => ({
   sendInviteEmail: vi.fn(async () => {}),
@@ -26,11 +27,16 @@ beforeAll(async () => {
     `TRUNCATE TABLE ${tables.rows.map((t) => `"${t.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`
   )
 
-  const reg = await request(app)
-    .post('/api/v1/auth/register')
-    .send({ email: 'csv@example.com', password: PASSWORD, name: 'Csv' })
-  token = reg.body.accessToken
-  const userId = reg.body.user.id
+  const passwordHash = await bcrypt.hash(PASSWORD, 12)
+  const insert = await db.query<{ id: string }>(
+    'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id',
+    ['csv@example.com', passwordHash, 'Csv']
+  )
+  const userId = insert.rows[0]!.id
+  const login = await request(app)
+    .post('/api/v1/auth/login')
+    .send({ email: 'csv@example.com', password: PASSWORD })
+  token = login.body.accessToken
 
   const hh = await request(app)
     .post('/api/v1/households')

@@ -44,39 +44,6 @@ function setRefreshCookie(res: import('express').Response, token: string) {
   })
 }
 
-// ─── POST /auth/register ─────────────────────────────────────────────────────
-const RegisterSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(1),
-})
-
-router.post('/register', async (req, res, next) => {
-  try {
-    const body = RegisterSchema.parse(req.body)
-
-    const existing = await db.query('SELECT id FROM users WHERE email = $1', [body.email])
-    if (existing.rows.length > 0) {
-      throw new AppError(409, 'EMAIL_ALREADY_EXISTS', 'An account with this email already exists')
-    }
-
-    const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS)
-    const result = await db.query<{ id: string; email: string; name: string }>(
-      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name',
-      [body.email, passwordHash, body.name]
-    )
-    const user = result.rows[0]!
-
-    const accessToken = issueAccessToken(user.id, user.email)
-    const refreshToken = await issueRefreshToken(user.id)
-    setRefreshCookie(res, refreshToken)
-
-    res.status(201).json({ accessToken, user })
-  } catch (err) {
-    next(err)
-  }
-})
-
 // ─── POST /auth/login ────────────────────────────────────────────────────────
 const LoginSchema = z.object({
   email: z.string().email(),
