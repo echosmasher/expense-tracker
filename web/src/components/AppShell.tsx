@@ -14,6 +14,8 @@ import {
 import { households } from '@expense-tracker/shared'
 import { useAuthStore } from '../stores/authStore'
 import { useHouseholdStore } from '../stores/householdStore'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { BottomTabBar } from './BottomTabBar'
 
 const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/expenses', label: 'Expenses', icon: Receipt },
@@ -32,6 +34,7 @@ export function AppShell() {
   const logout = useAuthStore((s) => s.logout)
   const household = useHouseholdStore((s) => s.household)
   const setHousehold = useHouseholdStore((s) => s.setHousehold)
+  const isPhone = useMediaQuery('(max-width: 767px)')
 
   useEffect(() => {
     if (household) return
@@ -57,41 +60,45 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="sidebar-brand">
-          <span className="brand-serif">Household Wizard</span>
-          <span className="brand-dot">.</span>
-        </div>
-
-        <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/expenses'}
-              className={({ isActive }) =>
-                `nav-item ${isActive ? 'nav-item--active' : ''}`
-              }
-            >
-              <item.icon className="nav-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
-              <span className="nav-label">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-user" onClick={() => navigate('/settings/profile')} role="button" tabIndex={0}>
-            <div className="user-avatar">{name?.charAt(0).toUpperCase() ?? '?'}</div>
-            <span className="user-name">{name ?? 'User'}</span>
-            <span className="user-settings-hint">Settings</span>
+      {!isPhone && (
+        <aside className="app-sidebar">
+          <div className="sidebar-brand">
+            <span className="brand-serif">Household Wizard</span>
+            <span className="brand-dot">.</span>
           </div>
-          <button className="logout-btn" onClick={handleLogout}>Log out</button>
-        </div>
-      </aside>
 
-      <main className="app-main">
+          <nav className="sidebar-nav">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/expenses'}
+                className={({ isActive }) =>
+                  `nav-item ${isActive ? 'nav-item--active' : ''}`
+                }
+              >
+                <item.icon className="nav-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
+                <span className="nav-label">{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="sidebar-footer">
+            <div className="sidebar-user" onClick={() => navigate('/settings/profile')} role="button" tabIndex={0}>
+              <div className="user-avatar">{name?.charAt(0).toUpperCase() ?? '?'}</div>
+              <span className="user-name">{name ?? 'User'}</span>
+              <span className="user-settings-hint">Settings</span>
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>Log out</button>
+          </div>
+        </aside>
+      )}
+
+      <main className={isPhone ? 'app-main app-main--phone' : 'app-main'}>
         <Outlet />
       </main>
+
+      {isPhone && <BottomTabBar />}
 
       <style>{`
 
@@ -262,6 +269,12 @@ export function AppShell() {
           flex: 1;
           min-width: 0;
           overflow-y: auto;
+        }
+
+        .app-main--phone {
+          /* Keeps content clear of the fixed bottom tab bar (its own height
+             plus the safe-area inset already baked into its padding). */
+          padding-bottom: calc(64px + env(safe-area-inset-bottom));
         }
       `}</style>
     </div>

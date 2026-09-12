@@ -74,3 +74,12 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
 }
+
+/* iOS Safari zooms the viewport on focus of any input under 16px. Below the
+   tablet breakpoint (matches AppShell's phone/desktop split) every text
+   input is forced to 16px, overriding the smaller component-level sizes. */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

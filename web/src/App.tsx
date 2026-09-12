@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/authStore'
 // Layout
 import { AppShell } from './components/AppShell'
 import { SplashScreen } from './components/SplashScreen'
+import { More } from './pages/More'
 
 // Auth
 import { Login } from './pages/Auth/Login'
@@ -97,6 +98,7 @@ export function App() {
             <Route path="/settings/categories" element={<CategorySettings />} />
             <Route path="/settings/profile" element={<ProfileSettings />} />
             <Route path="/create-household" element={<CreateHousehold />} />
+            <Route path="/more" element={<More />} />
           </Route>
 
           {/* Default */}
