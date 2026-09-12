@@ -1,8 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 
 // Layout
 import { AppShell } from './components/AppShell'
+import { SplashScreen } from './components/SplashScreen'
 
 // Auth
 import { Register } from './pages/Auth/Register'
@@ -38,13 +40,30 @@ import { CategorySettings } from './pages/Settings/CategorySettings'
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+  const status = useAuthStore((s) => s.status)
+  const location = useLocation()
+  return status === 'authenticated'
+    ? <>{children}</>
+    : <Navigate to="/login" state={{ from: location }} replace />
 }
 
 function RequireGuest({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/home" replace />
+  const status = useAuthStore((s) => s.status)
+  return status !== 'authenticated' ? <>{children}</> : <Navigate to="/home" replace />
+}
+
+// A session restore is in flight until proven otherwise — the routes below never render
+// until the outcome is known, so the login page can't flash in front of a resumed session.
+function SessionGate({ children }: { children: React.ReactNode }) {
+  const status = useAuthStore((s) => s.status)
+  const restoreSession = useAuthStore((s) => s.restoreSession)
+
+  useEffect(() => {
+    restoreSession()
+  }, [restoreSession])
+
+  if (status === 'loading') return <SplashScreen />
+  return <>{children}</>
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
@@ -52,39 +71,41 @@ function RequireGuest({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public auth routes */}
-        <Route path="/register" element={<RequireGuest><Register /></RequireGuest>} />
-        <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />
-        <Route path="/accept-invite" element={<AcceptInvite />} />
+      <SessionGate>
+        <Routes>
+          {/* Public auth routes */}
+          <Route path="/register" element={<RequireGuest><Register /></RequireGuest>} />
+          <Route path="/login" element={<RequireGuest><Login /></RequireGuest>} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
 
-        {/* Main app with sidebar navigation */}
-        <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-          <Route path="/home" element={<ExpenseList />} />
-          <Route path="/expenses" element={<ExpenseList />} />
-          <Route path="/expenses/new" element={<AddExpense />} />
-          <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
+          {/* Main app with sidebar navigation */}
+          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+            <Route path="/home" element={<ExpenseList />} />
+            <Route path="/expenses" element={<ExpenseList />} />
+            <Route path="/expenses/new" element={<AddExpense />} />
+            <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
 
-          <Route path="/settlement" element={<ActiveSettlement />} />
-          <Route path="/settlement/history" element={<History />} />
+            <Route path="/settlement" element={<ActiveSettlement />} />
+            <Route path="/settlement/history" element={<History />} />
 
-          <Route path="/projects" element={<ProjectList />} />
-          <Route path="/projects/new" element={<CreateProject />} />
-          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+            <Route path="/projects" element={<ProjectList />} />
+            <Route path="/projects/new" element={<CreateProject />} />
+            <Route path="/projects/:projectId" element={<ProjectDetail />} />
 
-          <Route path="/statistics" element={<MonthlyOverview />} />
-          <Route path="/statistics/trends" element={<CategoryTrends />} />
+            <Route path="/statistics" element={<MonthlyOverview />} />
+            <Route path="/statistics/trends" element={<CategoryTrends />} />
 
-          <Route path="/settings/members" element={<MembersAndCards />} />
-          <Route path="/settings/categories" element={<CategorySettings />} />
-          <Route path="/settings/profile" element={<ProfileSettings />} />
-          <Route path="/create-household" element={<CreateHousehold />} />
-        </Route>
+            <Route path="/settings/members" element={<MembersAndCards />} />
+            <Route path="/settings/categories" element={<CategorySettings />} />
+            <Route path="/settings/profile" element={<ProfileSettings />} />
+            <Route path="/create-household" element={<CreateHousehold />} />
+          </Route>
 
-        {/* Default */}
-        <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
+          {/* Default */}
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </SessionGate>
     </BrowserRouter>
   )
 }

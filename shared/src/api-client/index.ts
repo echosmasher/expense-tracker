@@ -8,6 +8,17 @@ let accessToken: string | null = null
 let onTokenRefreshed: ((token: string) => void) | null = null
 let refreshPromise: Promise<string> | null = null
 
+// Same-origin by default; override for deployments where the API lives on a different origin.
+let apiBaseUrl = ''
+
+export function configureApiClient(options: { baseUrl?: string }) {
+  apiBaseUrl = options.baseUrl ?? ''
+}
+
+export function apiUrl(path: string): string {
+  return `${apiBaseUrl}/api/v1${path}`
+}
+
 export function setAccessToken(token: string) {
   accessToken = token
 }
@@ -19,7 +30,7 @@ export function onRefresh(callback: (token: string) => void) {
 async function refreshToken(): Promise<string> {
   if (refreshPromise) return refreshPromise
 
-  refreshPromise = fetch('/api/v1/auth/refresh', {
+  refreshPromise = fetch(apiUrl('/auth/refresh'), {
     method: 'POST',
     credentials: 'include',
   })
@@ -46,7 +57,7 @@ async function request<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...options,
     headers,
     credentials: 'include',
@@ -97,8 +108,10 @@ export const auth = {
   login: (body: { email: string; password: string }) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 
+  // No retry: a 401 here means "not signed in", not an expired access token — retrying
+  // would fire a second /auth/refresh via the generic 401 handler for every logged-out load.
   refresh: () =>
-    request<{ accessToken: string }>('/auth/refresh', { method: 'POST' }),
+    request<{ accessToken: string }>('/auth/refresh', { method: 'POST' }, false),
 
   logout: () =>
     request<void>('/auth/logout', { method: 'POST' }),
@@ -417,7 +430,7 @@ export const statistics = {
   },
   exportCsv: (householdId: string, params?: { month?: string; includePersonal?: boolean }) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString()
-    return fetch(`/api/v1/households/${householdId}/statistics/export${qs ? `?${qs}` : ''}`, {
+    return fetch(apiUrl(`/households/${householdId}/statistics/export${qs ? `?${qs}` : ''}`), {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
   },

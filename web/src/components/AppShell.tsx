@@ -29,7 +29,7 @@ const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
 export function AppShell() {
   const navigate = useNavigate()
   const name = useAuthStore((s) => s.name)
-  const clearUser = useAuthStore((s) => s.clearUser)
+  const logout = useAuthStore((s) => s.logout)
   const household = useHouseholdStore((s) => s.household)
   const setHousehold = useHouseholdStore((s) => s.setHousehold)
 
@@ -49,8 +49,8 @@ export function AppShell() {
     return () => { cancelled = true }
   }, [household, setHousehold, navigate])
 
-  function handleLogout() {
-    clearUser()
+  async function handleLogout() {
+    await logout()
     setHousehold(null)
     navigate('/login')
   }

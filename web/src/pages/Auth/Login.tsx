@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link, type Location } from 'react-router-dom'
 import { auth } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { AuthShell } from '../../components/AuthShell'
@@ -8,6 +8,8 @@ import { Button } from '../../components/Button'
 
 export function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: Location } | null)?.from
   const setUser = useAuthStore((s) => s.setUser)
 
   const [email, setEmail] = useState('')
@@ -27,7 +29,7 @@ export function Login() {
     try {
       const res = await auth.login({ email: email.trim(), password })
       setUser(res.user, res.accessToken)
-      navigate('/home')
+      navigate(from ? `${from.pathname}${from.search}` : '/home', { replace: true })
     } catch (err: any) {
       if (err?.status === 401) {
         setErrors({ general: 'Incorrect email or password.' })
