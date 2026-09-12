@@ -9,6 +9,12 @@
     "preview": "vite preview",
     "lint": "eslint src"
   },
+  "//": [
+    "@types/react and @types/react-dom are pinned below react's ^18.3.0:",
+    "recharts@2.15.4's component typings (Legend, Tooltip, Pie, Line) don't",
+    "satisfy @types/react 18.3.x's stricter JSX element type. Bumping this",
+    "breaks `npm run build` until recharts is upgraded past the 2.x line."
+  ],
   "dependencies": {
     "@expense-tracker/shared": "*",
     "lucide-react": "^0.460.0",
@@ -19,7 +25,6 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
-    "//@types/react": "Pinned below react's ^18.3.0: recharts@2.15.4's component typings (Legend, Tooltip, Pie, Line) don't satisfy @types/react 18.3.x's stricter JSX element type. Bumping this breaks `npm run build` until recharts is upgraded past the 2.x line.",
     "@types/react": "~18.2.0",
     "@types/react-dom": "~18.2.0",
     "@vitejs/plugin-react": "^4.3.0",
