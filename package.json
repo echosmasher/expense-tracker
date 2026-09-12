@@ -5,7 +5,6 @@
   "workspaces": [
     "backend",
     "web",
-    "mobile",
     "shared"
   ],
   "scripts": {

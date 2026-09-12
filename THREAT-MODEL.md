@@ -48,7 +48,7 @@ third-party API keys.
 | T6 | **Injection** | Exclusively parameterized `pg` queries; dynamic statistics filters use positional params, never interpolation; CSV export quotes fields **and prefixes formula-trigger cells (`= + - @`) with `'`** (tested) | SQL surface is clean today |
 | T7 | **Secret exposure** | Secrets in `.env` (gitignored), validated at boot, rejected if placeholder; logger redacts `password`/`token`/`authorization`; **documented rotation runbook with blast-radius per secret** (DEPLOYMENT.md) | Secrets still plaintext on the host (acceptable for a single trusted host); receipt data egresses to OpenAI |
 | T8 | **Invite abuse** | Tokens are random 32-byte, sha256-hashed, 7-day expiry, single-use, bound to the invited email | A leaked unexpired token is usable by anyone until it's accepted (then closed) |
-| T9 | **Supply chain** | `npm ci` from committed lockfile; `npm audit --omit=dev` gates backend/shared/web in CI | Expo/RN toolchain in `mobile/` carries unpatched advisories (needs SDK upgrade); no SBOM/pinned digests |
+| T9 | **Supply chain** | `npm ci` from committed lockfile; `npm audit --omit=dev` gates every workspace in CI | No SBOM/pinned digests |
 | T10 | **DoS** | Per-IP rate limits on auth and receipt-parse; 1 MB JSON body cap | No global request quota; a valid member can issue unbounded normal API calls |
 
 ## Out of scope
@@ -71,6 +71,6 @@ Remaining — each deliberately deferred, not forgotten:
 - **T7 (secrets manager)**: moving secrets off plaintext `.env` to Vault/Doppler/KMS is only
   worth the operational weight beyond a single trusted host. The rotation runbook covers the
   realistic risk for this deployment.
-- **T9 (mobile toolchain)**: the remaining `npm audit` advisories are all in the Expo SDK 51 /
-  RN 0.74 dependency tree. Clearing them is a major Expo SDK upgrade that must be validated on
-  iOS hardware — out of scope for an automated change.
+- **T9 (mobile toolchain)**: resolved. The Expo/React Native package that carried the
+  remaining unpatched advisories has been removed (`mobile/` is deleted); `npm audit --omit=dev`
+  is now clean and enforced across every workspace.

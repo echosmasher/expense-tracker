@@ -34,12 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Production deps of the server, web app, and shared lib must be CVE-free.
-      # The mobile workspace is excluded: all remaining advisories sit in the
-      # Expo SDK 51 / React Native 0.74 toolchain and only clear with an Expo
-      # SDK major upgrade (tracked separately).
-      - name: Audit production dependencies (backend, shared, web)
-        run: npm audit --omit=dev --workspace=backend --workspace=shared --workspace=web
+      # Production deps of every workspace must be CVE-free.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --workspaces
 
       # backend and web resolve @expense-tracker/shared via its built dist/
       - name: Build shared package
@@ -48,10 +45,10 @@ jobs:
       - name: Lint backend + shared (enforced)
         run: npm run lint --workspace=backend --workspace=shared
 
-      # web + mobile carry pre-existing lint debt (no-explicit-any, unused vars).
-      # Keep them visible without blocking until the debt is burned down.
-      - name: Lint web + mobile (non-blocking)
-        run: npm run lint --workspace=web --workspace=mobile
+      # web carries pre-existing lint debt (no-explicit-any, unused vars).
+      # Keep it visible without blocking until the debt is burned down.
+      - name: Lint web (non-blocking)
+        run: npm run lint --workspace=web
         continue-on-error: true
 
       - name: Build all packages (includes typecheck)

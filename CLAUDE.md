@@ -1,6 +1,6 @@
 # expense-tracker
 
-A self-hosted shared household expense tracker. Four-package npm workspace monorepo.
+A self-hosted shared household expense tracker. Three-package npm workspace monorepo.
 
 ## Packages
 
@@ -8,8 +8,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 |---------|---------|
 | `backend/` | Express 4 + TypeScript REST API |
 | `web/` | React 18 + Vite + TailwindCSS web app |
-| `mobile/` | Expo SDK 51 iOS app (React Native) |
-| `shared/` | Settlement calculator + typed API client (shared by web + mobile) |
+| `shared/` | Settlement calculator + typed API client (shared by web) |
 
 ## Key Technology Decisions
 
@@ -55,8 +54,6 @@ web/src/
 shared/src/
   api-client/      index.ts — typed fetch wrapper, 401 auto-refresh
   calc/            settlement.ts — calculateSettlement()
-
-mobile/src/        Expo Router screens (iOS only)
 ```
 
 ## Commands
@@ -90,11 +87,9 @@ npm test
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push to master and every PR:
-lint (enforced for backend + shared; web + mobile non-blocking pending lint-debt cleanup),
+lint (enforced for backend + shared; web non-blocking pending lint-debt cleanup),
 build, shared + backend test suites against a Postgres 16 service container, and
-`npm audit --omit=dev` for backend/shared/web (must be clean). Remaining audit findings
-are confined to the Expo SDK 51 / React Native 0.74 toolchain in `mobile/` and only
-clear with an Expo SDK upgrade.
+`npm audit --omit=dev` across every workspace (must be clean).
 
 ## Environment Variables
 
@@ -126,3 +121,13 @@ Full specification in `../specs/001-expense-tracker-app/`:
 - `spec.md` — user stories and acceptance criteria
 - `plan.md` — architecture decisions
 - `tasks.md` — 69 tasks, all complete ✓
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`echosmasher/expense-tracker`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Multi-context: a root `CONTEXT-MAP.md` points to a `CONTEXT.md` per workspace package (`backend/`, `web/`, `shared/`), each with its own `docs/adr/`; system-wide decisions live in the root `docs/adr/`. See `docs/agents/domain.md`.

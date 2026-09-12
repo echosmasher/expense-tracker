@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A self-hosted shared household expense tracker. Four-package npm workspace monorepo.
+A self-hosted shared household expense tracker. Three-package npm workspace monorepo.
 
 ## Packages
 
@@ -8,8 +8,7 @@ A self-hosted shared household expense tracker. Four-package npm workspace monor
 |---------|---------|
 | `backend/` | Express 4 + TypeScript REST API |
 | `web/` | React 18 + Vite + TailwindCSS web app |
-| `mobile/` | Expo SDK 51 iOS app (React Native) |
-| `shared/` | Settlement calculator + typed API client (shared by web + mobile) |
+| `shared/` | Settlement calculator + typed API client (shared by web) |
 
 ## Key Technology Decisions
 

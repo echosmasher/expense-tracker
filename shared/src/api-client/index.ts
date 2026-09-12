@@ -1,5 +1,5 @@
 /**
- * Typed REST API client — shared by web and mobile.
+ * Typed REST API client used by web.
  * Handles token refresh on 401 automatically.
  * All monetary amounts in øre (integers).
  */
