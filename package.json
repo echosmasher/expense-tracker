@@ -16,6 +16,9 @@
     "migrate": "npm run migrate --workspace=backend",
     "test": "npm run test --workspaces --if-present"
   },
+  "overrides": {
+    "qs": "^6.16.0"
+  },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
