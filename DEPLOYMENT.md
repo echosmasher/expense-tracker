@@ -133,7 +133,7 @@ If any service stays unhealthy, `docker compose logs <service>` will tell you wh
 Migrations don't run automatically. After the `db` and `api` services are healthy:
 
 ```bash
-docker compose exec api npm run migrate
+docker compose exec api npm run migrate:prod
 ```
 
 Expect to see every migration from `001_create_all_tables.sql` through `008_settlement_expenses_snapshot.sql` listed. On a fresh database all will be `apply`. On an upgrade only new ones will be `apply` — the rest `skip`.
@@ -214,7 +214,7 @@ Notes:
 git pull
 docker compose build              # rebuild api + web with new code
 docker compose up -d               # rolling restart
-docker compose exec api npm run migrate   # if any new migration files
+docker compose exec api npm run migrate:prod   # if any new migration files
 ```
 
 If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step picks it up. There's no separate `npm install` step on the host — everything happens inside the image builds.
@@ -228,7 +228,7 @@ If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step pi
 | Settlement triggers but transaction "Mark paid" fails | `docker compose logs api` near the request time. Spec 003 changed the close handler; if you see `column does not exist`, you're missing migration 008. |
 | Receipt upload "AI parse failed" | Either `OPENAI_API_KEY` invalid/out of credits, or the 15s timeout fired. Logs in `api` will show which. The app falls back to empty line items — user can fill them in manually. |
 | Image thumbnails 403 / signature mismatch | `MINIO_PUBLIC_ENDPOINT` is wrong. It must be the URL the **browser** uses, not the internal Docker URL. |
-| "client password must be a string" on `npm run migrate` | `.env` not loaded. Should not happen via `docker compose exec api npm run migrate` (env vars come from the container). |
+| "client password must be a string" on `npm run migrate:prod` | `.env` not loaded. Should not happen via `docker compose exec api npm run migrate:prod` (env vars come from the container). |
 
 ## Operational notes specific to this build
 
