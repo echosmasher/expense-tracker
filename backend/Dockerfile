@@ -31,7 +31,11 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/ ./shared/
 COPY backend/package.json ./backend/
 RUN mkdir -p web mobile && echo '{"name":"@expense-tracker/web","version":"1.0.0","private":true,"dependencies":{"react":"^18.3.0","react-dom":"^18.3.0"}}' > web/package.json && echo '{"name":"@expense-tracker/mobile","version":"1.0.0","private":true}' > mobile/package.json
-RUN npm install --omit=dev --legacy-peer-deps
+# Same reason as the base stage above: the host lockfile pins react@18.2.0 at
+# root for mobile's sake, which splits react/react-dom into two separate
+# node_modules trees once mobile is stubbed out (react-dom can't resolve its
+# own react peer). Drop it so npm re-resolves against the stubs only.
+RUN rm -f package-lock.json && npm install --omit=dev --legacy-peer-deps
 COPY --from=build /app/shared/dist ./shared/dist
 COPY --from=build /app/backend/dist ./backend/dist
 WORKDIR /app/backend
