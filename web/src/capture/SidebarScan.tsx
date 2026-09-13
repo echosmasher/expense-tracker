@@ -6,8 +6,8 @@ import { pendingCount, useCaptureQueueStore } from './queue/captureQueue'
 
 /** The desktop sidebar's equivalent of the phone tab bar's Scan action — same
  * queue-backed capture, just a plain nav-styled row instead of a raised button.
- * `capture="environment"` (on CaptureInput) is a no-op outside mobile Safari/Chrome,
- * so this opens a normal file picker: "choosing an existing image" (spec 004 US3,
+ * CaptureInput has no camera-only hint, so this opens a normal file picker:
+ * "choosing an existing image" (spec 004 US3,
  * acceptance scenario 6) on a device with no camera. */
 export function SidebarScan() {
   const target = useScanTarget()
