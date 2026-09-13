@@ -64,9 +64,17 @@ export async function createDraftFromIntake(
       for (let idx = 0; idx < intake.items.length; idx++) {
         const item = intake.items[idx]!
         await client.query(
-          `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal, category_id)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [expenseId, item.description, item.quantity, item.unitPriceOre, taggedItems[idx]?.isPersonal ?? false, item.categoryId]
+          `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            expenseId,
+            item.description,
+            item.quantity,
+            item.unitPriceOre,
+            item.unitPriceOre * item.quantity,
+            taggedItems[idx]?.isPersonal ?? false,
+            item.categoryId,
+          ]
         )
       }
       return { expenseId, created: true }

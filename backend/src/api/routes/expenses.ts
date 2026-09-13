@@ -138,13 +138,14 @@ router.post('/', async (req, res, next) => {
       for (const item of resolvedLineItems) {
         await client.query(
           `INSERT INTO line_items
-             (expense_id, description, quantity, unit_price_ore, tag_id, is_personal, category_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             expenseId,
             item.description,
             item.quantity,
             item.unitPriceOre,
+            item.unitPriceOre * item.quantity,
             item.tagId ?? null,
             item.isPersonal,
             item.categoryId ?? null,
@@ -342,6 +343,7 @@ lineItemRouter.patch('/', async (req, res, next) => {
     params.push(lineItemId)
 
     await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
+    await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
     const newTotalAmountOre = await recomputeExpenseTotal(expenseId)
 
     // Return updated line item
@@ -474,9 +476,18 @@ router.post('/:expenseId/line-items', async (req, res, next) => {
     const body = LineItemSchema.parse(req.body)
 
     await db.query(
-      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, tag_id, is_personal, category_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [expenseId, body.description, body.quantity, body.unitPriceOre, body.tagId ?? null, body.isPersonal, body.categoryId ?? null]
+      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        expenseId,
+        body.description,
+        body.quantity,
+        body.unitPriceOre,
+        body.unitPriceOre * body.quantity,
+        body.tagId ?? null,
+        body.isPersonal,
+        body.categoryId ?? null,
+      ]
     )
     await recomputeExpenseTotal(expenseId)
 

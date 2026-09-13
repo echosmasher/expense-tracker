@@ -43,7 +43,7 @@ router.get('/', async (req, res, next) => {
 
     // Total by tag (household tag) for the month
     const byTagResult = await db.query<{ tag_id: string; tag_name: string; total_ore: string }>(
-      `SELECT li.tag_id, t.name as tag_name, SUM(li.unit_price_ore * li.quantity)::bigint as total_ore
+      `SELECT li.tag_id, t.name as tag_name, SUM(li.total_price_ore)::bigint as total_ore
        FROM line_items li
        JOIN expenses e ON e.id = li.expense_id
        LEFT JOIN tags t ON t.id = li.tag_id
@@ -73,7 +73,7 @@ router.get('/', async (req, res, next) => {
 
     // Top 5 items by total spend (all months for context)
     const topItemsResult = await db.query<{ description: string; total_ore: string; count: string }>(
-      `SELECT li.description, SUM(li.unit_price_ore * li.quantity)::bigint as total_ore, COUNT(*)::int as count
+      `SELECT li.description, SUM(li.total_price_ore)::bigint as total_ore, COUNT(*)::int as count
        FROM line_items li JOIN expenses e ON e.id = li.expense_id
        WHERE e.household_id = $1
          AND e.status IN ('confirmed', 'settled')
@@ -88,7 +88,7 @@ router.get('/', async (req, res, next) => {
     const trendResult = await db.query<{ month: string; tag_id: string; tag_name: string; total_ore: string }>(
       `SELECT TO_CHAR(e.expense_date, 'YYYY-MM') as month,
               li.tag_id, t.name as tag_name,
-              SUM(li.unit_price_ore * li.quantity)::bigint as total_ore
+              SUM(li.total_price_ore)::bigint as total_ore
        FROM line_items li
        JOIN expenses e ON e.id = li.expense_id
        LEFT JOIN tags t ON t.id = li.tag_id
@@ -120,7 +120,7 @@ router.get('/', async (req, res, next) => {
       item_count: string
     }>(
       `SELECT li.category_id, c.name as category_name,
-              SUM(li.unit_price_ore * li.quantity)::bigint as total_ore,
+              SUM(li.total_price_ore)::bigint as total_ore,
               COUNT(*)::int as item_count
        FROM line_items li
        JOIN expenses e ON e.id = li.expense_id
@@ -145,7 +145,7 @@ router.get('/', async (req, res, next) => {
     }>(
       `SELECT TO_CHAR(e.expense_date, 'YYYY-MM') as month,
               li.category_id, c.name as category_name,
-              SUM(li.unit_price_ore * li.quantity)::bigint as total_ore
+              SUM(li.total_price_ore)::bigint as total_ore
        FROM line_items li
        JOIN expenses e ON e.id = li.expense_id
        LEFT JOIN categories c ON c.id = li.category_id

@@ -274,8 +274,8 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       const eid = expResult.rows[0]!.id
       for (const li of body.lineItems) {
         await client.query(
-          'INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal, category_id) VALUES ($1,$2,$3,$4,$5,$6)',
-          [eid, li.description, li.quantity, li.unitPriceOre, li.isPersonal, li.categoryId ?? null]
+          'INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [eid, li.description, li.quantity, li.unitPriceOre, li.unitPriceOre * li.quantity, li.isPersonal, li.categoryId ?? null]
         )
       }
       return eid
@@ -427,9 +427,17 @@ projectDetailRouter.post('/expenses/:expenseId/line-items', async (req, res, nex
     const body = ProjectLineItemSchema.parse(req.body)
 
     await db.query(
-      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal, category_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [expenseId, body.description, body.quantity, body.unitPriceOre, body.isPersonal, body.categoryId ?? null]
+      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        expenseId,
+        body.description,
+        body.quantity,
+        body.unitPriceOre,
+        body.unitPriceOre * body.quantity,
+        body.isPersonal,
+        body.categoryId ?? null,
+      ]
     )
     await recomputeExpenseTotal(expenseId)
 
@@ -471,6 +479,7 @@ projectDetailRouter.patch('/expenses/:expenseId/line-items/:lineItemId', async (
     params.push(lineItemId)
 
     await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
+    await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
     await recomputeExpenseTotal(expenseId)
 
     const updated = await getFullExpense(expenseId, { projectId })

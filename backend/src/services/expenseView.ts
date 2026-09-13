@@ -119,7 +119,7 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
 /** Recompute and persist total_amount_ore from non-personal line items. */
 export async function recomputeExpenseTotal(expenseId: string): Promise<number> {
   const totalResult = await db.query<{ total: string }>(
-    `SELECT COALESCE(SUM(unit_price_ore * quantity), 0)::bigint as total
+    `SELECT COALESCE(SUM(total_price_ore), 0)::bigint as total
      FROM line_items WHERE expense_id = $1 AND is_personal = false`,
     [expenseId]
   )
