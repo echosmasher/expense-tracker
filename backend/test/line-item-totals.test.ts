@@ -151,6 +151,71 @@ describe('line_items.total_price_ore', () => {
     expect(String(statsRes.body.totalOre)).toBe(stored.rows[0]!.total)
   })
 
+  it('produces a settlement total byte-identical to the old read-time computation (SC-003)', async () => {
+    const legacy = await db.query<{ total: string }>(
+      `SELECT COALESCE(SUM(li.unit_price_ore * li.quantity), 0)::bigint as total
+       FROM line_items li
+       JOIN expenses e ON e.id = li.expense_id
+       WHERE e.household_id = $1
+         AND e.status = 'confirmed'
+         AND e.project_id IS NULL
+         AND li.is_personal = false`,
+      [householdId]
+    )
+
+    const triggerRes = await request(app)
+      .post(`/api/v1/households/${householdId}/settlements`)
+      .set('Authorization', `Bearer ${admin.token}`)
+    expect(triggerRes.status).toBe(201)
+
+    const detailRes = await request(app)
+      .get(`/api/v1/households/${householdId}/settlements/${triggerRes.body.id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+    expect(detailRes.status).toBe(200)
+
+    const settledTotal = detailRes.body.includedExpenses.reduce(
+      (sum: number, e: { totalAmountOre: number }) => sum + e.totalAmountOre,
+      0
+    )
+    expect(String(settledTotal)).toBe(legacy.rows[0]!.total)
+  })
+
+  it('migration 010 backfills a null total_price_ore byte-identically to unit_price_ore * quantity', async () => {
+    // Exercises the exact backfill statement from migration 010 against a
+    // manufactured pre-migration row (NOT NULL is dropped just for this
+    // insert, mirroring the column's state before the migration ran).
+    await db.transaction(async (client) => {
+      await client.query('ALTER TABLE line_items ALTER COLUMN total_price_ore DROP NOT NULL')
+      const expenseRow = await client.query<{ id: string }>(
+        `SELECT id FROM expenses WHERE household_id = $1 LIMIT 1`,
+        [householdId]
+      )
+      const expenseId = expenseRow.rows[0]!.id
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal)
+         VALUES ($1, 'Pre-migration row', 5, 777, NULL, false)
+         RETURNING id`,
+        [expenseId]
+      )
+      const lineItemId = inserted.rows[0]!.id
+
+      await client.query(
+        `UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE total_price_ore IS NULL AND id = $1`,
+        [lineItemId]
+      )
+      await client.query('ALTER TABLE line_items ALTER COLUMN total_price_ore SET NOT NULL')
+
+      const backfilled = await client.query<{ total_price_ore: number }>(
+        'SELECT total_price_ore FROM line_items WHERE id = $1',
+        [lineItemId]
+      )
+      expect(backfilled.rows[0]!.total_price_ore).toBe(5 * 777)
+
+      // Clean up: this row isn't part of any other assertion's fixture data.
+      await client.query('DELETE FROM line_items WHERE id = $1', [lineItemId])
+    })
+  })
+
   it('leaves expenses.total_amount_ore equal to the sum of non-personal total_price_ore', async () => {
     const rows = await db.query<{ id: string; total_amount_ore: number }>(
       `SELECT id, total_amount_ore FROM expenses WHERE household_id = $1`,
