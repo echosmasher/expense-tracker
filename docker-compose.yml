@@ -77,6 +77,17 @@ services:
       api:
         condition: service_healthy
 
+  cloudflared:
+    # Pinned to avoid silent breakage on `docker compose pull`. Bump intentionally.
+    image: cloudflare/cloudflared:2026.9.1
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      web:
+        condition: service_started
+
 volumes:
   postgres_data:
     driver: local

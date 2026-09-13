@@ -1,28 +1,37 @@
 # Deployment
 
-Operational checklist for hosting this app on a real machine reachable at a real domain. Reflects the state of the codebase as of 2026-05-25 (post-spec-003).
+Operational checklist for hosting this app on a real machine reachable at a real domain. Reflects the state of the codebase as of 2026-09-13 (post-spec-004, ticket 11 — public deployment via Cloudflare Tunnel).
 
 > There are older notes in `resources/deployment-guide.md` and `resources/server-deploy.md`. This file is the current one — start here.
 
 ## What you're deploying
 
-Four Docker services come up together via `docker-compose.yml`:
+Five Docker services come up together via `docker-compose.yml`:
 
 | Service | Image | Purpose | Internal port |
 |---|---|---|---|
 | `db` | `postgres:16-alpine` | Application database | 5432 |
-| `storage` | `minio:RELEASE.2025-09-07T16-13-09Z` | Receipt image storage (S3-compatible), internal-only | 9000 / 9001 console (neither published on the host) |
-| `api` | built from `backend/Dockerfile` | Express + WebSocket server | 3001 |
-| `web` | built from `web/Dockerfile` | nginx serving the React bundle + proxying `/api` to `api` | 80 |
+| `storage` | `minio:RELEASE.2025-09-07T16-13-09Z` | Receipt image storage (S3-compatible), internal-only | 9000 / 9001 console (neither published on the host, no publicly reachable endpoint) |
+| `api` | built from `backend/Dockerfile` | Express server | 3001 |
+| `web` | built from `web/Dockerfile` | nginx serving the React bundle, proxying `/api` to `api`, and setting security headers | 80 |
+| `cloudflared` | `cloudflare/cloudflared:<pinned>` | Cloudflare Tunnel connector — the only path in from the internet | — (outbound-only) |
 
 Persistent state lives in two Docker volumes: `postgres_data` and `minio_data`. Back both up.
+
+The Cloudflare Tunnel is the **one supported path to the public internet**. There is no
+port-forwarding/Caddy/nginx-proxy-manager option documented here anymore: it means open router
+ports, your own TLS renewal, and (in the old design) a published MinIO console port. The tunnel
+needs none of that — `cloudflared` makes an outbound-only connection to Cloudflare's edge, so
+nothing on the host listens on a public port at all.
 
 ## Prerequisites
 
 - A Linux host you control (laptop, NUC, mini-PC, VPS — anything that can keep Docker running).
 - Docker Engine + Docker Compose v2 installed.
-- A domain you control (your boyfriend's domain). Subdomain is fine, e.g. `tracker.yourdomain.no`.
+- A domain you control, added as a zone in Cloudflare (cloudflare.com — free tier is fine).
+  Subdomain is fine, e.g. `tracker.yourdomain.no`.
 - Accounts:
+  - **Cloudflare** — Zero Trust tunnel + DNS + TLS termination.
   - **Resend** (resend.com) — transactional email for invites and settlement notifications.
   - **OpenAI** — used by `backend/src/services/receiptParser.ts` for receipt OCR (`gpt-4o-mini`). Free tier won't be enough long-term; budget a few dollars/month.
 
@@ -36,37 +45,29 @@ cp .env.example .env
 
 Edit `.env` next — do not start anything yet.
 
-## Step 2 — Domain & networking
+## Step 2 — Create the Cloudflare Tunnel
 
-You have two reasonable paths. Pick one.
+1. Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** →
+   choose **Cloudflared**, name it (e.g. `expense-tracker`).
+2. On the "Install connector" step, copy the token from the `cloudflared tunnel run --token
+   <...>` command shown — that token is the whole `TUNNEL_TOKEN` value, nothing to install on the
+   host directly, the token goes in `.env` instead (Step 4) and the `cloudflared` compose service
+   uses it.
+3. Add a **Public Hostname**: subdomain `tracker` (or whatever you chose), domain
+   `yourdomain.no`, service type `HTTP`, URL `web:80` — that's the Docker Compose service name and
+   port, not `localhost`.
+4. Save. Cloudflare creates the DNS record for you; no manual `A` record and no dynamic DNS setup
+   — the tunnel is an outbound connection from `cloudflared`, so your public IP (and whether it
+   changes) doesn't matter.
+5. Cloudflare terminates TLS at its edge. The app itself stays plain HTTP inside the Docker
+   network; you still set `APP_URL`/`WEB_ORIGIN` to the `https://` hostname (Step 4) because
+   that's what a browser actually sees.
 
-### Option A — Port forwarding on your home router
+Do NOT serve plain HTTP to the public internet — refresh tokens are httpOnly cookies with
+`SameSite=strict`; some browsers will silently reject them on insecure origins. This is moot with
+the tunnel (Cloudflare always terminates as HTTPS to the browser) but matters if you ever bypass it.
 
-1. Give the host machine a static internal IP (DHCP reservation in the router).
-2. Forward router ports `80` and `443` → host's internal IP.
-3. In the domain's DNS, create an `A` record for `tracker.yourdomain.no` pointing at your **public** IP.
-4. If your public IP changes (most home ISPs), set up dynamic DNS — e.g. via your DNS provider's API, or services like duckdns.org / no-ip.com.
-
-### Option B — Cloudflare Tunnel (recommended if you don't want to open router ports)
-
-1. Sign up at cloudflare.com, add `yourdomain.no` as a zone.
-2. Install `cloudflared` on the host, run `cloudflared tunnel login`, create a tunnel, route `tracker.yourdomain.no` to `http://localhost:80`.
-3. No port forwarding, no public IP exposure, no Let's Encrypt config — Cloudflare terminates TLS.
-
-Either option ends with `https://tracker.yourdomain.no` reaching the `web` container.
-
-## Step 3 — TLS / HTTPS
-
-Whatever the app's invite-email links say in `APP_URL` is what people will click. Plan for HTTPS from day one.
-
-| Path you took in Step 2 | What handles TLS |
-|---|---|
-| Option A (port forwarding) | Add a reverse proxy in front of the `web` service. Easiest: **Caddy** as a sibling container — auto-renews Let's Encrypt certs. Or **nginx-proxy-manager** if you prefer a UI. Point it at the `web` container on port 80. Open router ports `80` and `443`. |
-| Option B (Cloudflare Tunnel) | Cloudflare terminates TLS. App stays HTTP internally; you set `APP_URL=https://tracker.yourdomain.no` regardless. |
-
-Do NOT serve plain HTTP to the public internet — refresh tokens are httpOnly cookies with `SameSite=strict`; some browsers will silently reject them on insecure origins.
-
-## Step 4 — Verify the domain in Resend
+## Step 3 — Verify the domain in Resend
 
 Required for any invite or settlement email to actually deliver.
 
@@ -78,7 +79,7 @@ Required for any invite or settlement email to actually deliver.
 
 Until this is done, every email send will fail and `console.log` fallback lines (only in non-production mode) won't help in prod.
 
-## Step 5 — Environment variables
+## Step 4 — Environment variables
 
 Open `.env` and set every value. None of these have safe defaults for production.
 
@@ -110,11 +111,12 @@ openssl rand -base64 32
 | `EMAIL_FROM` | `noreply@yourdomain.no` | Must be on a Resend-verified domain |
 | `APP_URL` | `https://tracker.yourdomain.no` | Used in invite + settlement email links |
 | `WEB_ORIGIN` | `https://tracker.yourdomain.no` | CORS allow-list; must match `APP_URL` |
-| `WEB_PORT` | `80` | Host port the `web` container binds to. Leave 80 if a reverse proxy handles 443; if you're serving directly, you'll need 443 + TLS termination in `web/Dockerfile` (not the current setup). |
+| `WEB_PORT` | `80` | Host port the `web` container binds to. The tunnel talks to `web:80` over the Docker network directly, not through this host port — this is only for LAN access (e.g. `http://<host-lan-ip>`). Fine to leave at the default; drop the `ports:` entry from `docker-compose.yml` entirely if you don't want LAN access either. |
+| `TUNNEL_TOKEN` | `eyJhIjoi...` | From the Cloudflare Zero Trust tunnel's "Install connector" step (Step 2). Powers the `cloudflared` service — the only component with a route in from the internet. |
 
 The compose file hardcodes `NODE_ENV: production` for the `api` service, so the dev-only invite/settlement console.logs (`backend/src/services/email.ts`) stay silent in prod. No action needed.
 
-## Step 6 — First deploy
+## Step 5 — First deploy
 
 ```bash
 docker compose pull        # pull base images
@@ -126,7 +128,7 @@ docker compose logs -f api # watch for "listening on 3001"
 
 If any service stays unhealthy, `docker compose logs <service>` will tell you why. Common stumbles: wrong `DATABASE_URL` hostname, MinIO secret key shorter than 8 chars, missing `OPENAI_API_KEY` so receipt parser fails on first upload.
 
-## Step 7 — Run migrations
+## Step 6 — Run migrations
 
 Migrations don't run automatically. After the `db` and `api` services are healthy:
 
@@ -138,7 +140,7 @@ Expect to see every migration from `001_create_all_tables.sql` through `008_sett
 
 Re-run this after any future deploy that adds files to `backend/src/db/migrations/`.
 
-## Step 8 — Create the MinIO bucket
+## Step 7 — Create the MinIO bucket
 
 The `receipts` bucket is what the app uploads to. Compose doesn't create it, and the base
 compose file publishes no MinIO port on the host — run this from inside the container:
@@ -148,7 +150,7 @@ docker compose exec storage mc alias set local http://localhost:9000 "$MINIO_ACC
 docker compose exec storage mc mb local/receipts
 ```
 
-## Step 9 — Create the first user
+## Step 8 — Create the first user
 
 There is no public registration route — accounts exist only by invitation, and the very first
 account has no inviter. Create it from the host:
@@ -164,7 +166,41 @@ refuses if the email already exists.
 2. Create a household (`/create-household`). The creator is automatically the admin.
 3. Invite your household members via the Settings page. They get an email with an accept-invite link.
 
-## Step 10 — Backups
+## Verification checklist
+
+Run this after first deploy, and again after any change to `docker-compose.yml`, `web/nginx.conf`,
+or the tunnel config. All of it targets the *public* hostname — that's what a stranger, or your
+phone on cellular, actually reaches.
+
+1. **Port check — only the tunnel path serves the app.** From a machine outside your LAN (a phone
+   on cellular works), confirm the object store and API aren't directly reachable:
+   ```bash
+   nmap -Pn -p 9000,3001 <your-public-ip-or-hostname>
+   ```
+   Both should show `filtered` or `closed` — `cloudflared` makes an outbound-only connection, so
+   nothing should be listening on those ports from the outside at all. If you dropped `web`'s
+   `ports:` mapping too, port 80 should be closed as well; the tunnel is the only way in regardless.
+2. **Header check.**
+   ```bash
+   curl -I https://tracker.yourdomain.no
+   ```
+   Expect `content-security-policy`, `strict-transport-security`, `x-content-type-options:
+   nosniff`, `referrer-policy`, and `permissions-policy` in the response. Attach this output to
+   the deployment ticket/issue as evidence.
+3. **CSP console check.** Open the public hostname in a browser with devtools open and walk
+   through login, expense list, scan, draft review, an expense with a receipt image, settlement,
+   projects, statistics, and settings. Zero CSP violations in the console — the policy is verified
+   against the running app, not assumed.
+4. **Client IP check.** Trigger a failed login and check `docker compose logs api` for the
+   request: `x-forwarded-for` / the rate-limit key should show the real client (your phone's/browser's
+   public IP), not a Cloudflare or Docker-internal address. `backend/test/rate-limit.test.ts` pins
+   the same behavior at the unit level (nginx forwards `CF-Connecting-IP`; the API trusts exactly
+   one hop).
+5. **Cellular check (SC-002).** On a phone on cellular, off the home Wi-Fi entirely: log in, scan
+   a receipt, review the draft, confirm it. This is the actual acceptance test — the previous four
+   steps are diagnostics for when this one fails.
+
+## Step 9 — Backups
 
 You only need to back up two Docker volumes — everything else is reproducible from git.
 
@@ -186,7 +222,7 @@ For a richer Postgres backup, prefer `pg_dump` over a raw volume tarball — sur
 docker compose exec db pg_dump -U "$POSTGRES_USER" expense_tracker | gzip > backups/db-$(date +%Y%m%d).sql.gz
 ```
 
-## Step 10.5 — Rotating secrets
+## Step 9.5 — Rotating secrets
 
 Rotate on a schedule (e.g. yearly) and immediately on any suspected exposure
 (a leaked `.env`, a departed housemate, a compromised laptop). All secrets live
@@ -212,7 +248,7 @@ Notes:
   single trusted host. A secrets manager (Vault, Doppler, cloud KMS) is only worth
   the operational weight if you outgrow that. See `THREAT-MODEL.md` (T7).
 
-## Step 11 — Updates
+## Step 10 — Updates
 
 ```bash
 git pull
@@ -244,8 +280,8 @@ If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step pi
 
 ## What you'll set up *outside* this repo
 
-- DNS records for the domain (A record + DKIM/SPF/DMARC for Resend).
-- Reverse proxy / TLS termination (Caddy / nginx-proxy-manager / Cloudflare Tunnel).
+- The Cloudflare zone, tunnel, and public hostname (Step 2) — DNS and TLS termination both live there now.
+- DKIM/SPF/DMARC DNS records for Resend.
 - Off-host backup destination.
 - Resend account, OpenAI account.
 - Optional: uptime monitoring (UptimeRobot, BetterUptime — free tiers fine for one app) pointed at `https://tracker.yourdomain.no/health`.
