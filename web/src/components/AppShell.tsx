@@ -17,10 +17,14 @@ import { useHouseholdStore } from '../stores/householdStore'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { BottomTabBar } from './BottomTabBar'
 import { OfflineBanner } from './OfflineBanner'
+import { SidebarScan } from '../capture/SidebarScan'
 
-const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
+const NAV_ITEMS_BEFORE_SCAN: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/expenses', label: 'Expenses', icon: Receipt },
   { to: '/expenses/new', label: 'Add Expense', icon: Plus },
+]
+
+const NAV_ITEMS_AFTER_SCAN: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/settlement', label: 'Settlement', icon: Scale },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/statistics', label: 'Statistics', icon: BarChart3 },
@@ -69,11 +73,26 @@ export function AppShell() {
           </div>
 
           <nav className="sidebar-nav">
-            {NAV_ITEMS.map((item) => (
+            {NAV_ITEMS_BEFORE_SCAN.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === '/expenses'}
+                className={({ isActive }) =>
+                  `nav-item ${isActive ? 'nav-item--active' : ''}`
+                }
+              >
+                <item.icon className="nav-icon" size={18} strokeWidth={1.75} aria-hidden="true" />
+                <span className="nav-label">{item.label}</span>
+              </NavLink>
+            ))}
+
+            <SidebarScan />
+
+            {NAV_ITEMS_AFTER_SCAN.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
                 className={({ isActive }) =>
                   `nav-item ${isActive ? 'nav-item--active' : ''}`
                 }

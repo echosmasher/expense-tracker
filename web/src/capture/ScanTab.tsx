@@ -1,27 +1,16 @@
-import { useLocation } from 'react-router-dom'
 import { ScanLine } from 'lucide-react'
-import { useHouseholdStore } from '../stores/householdStore'
 import { CaptureInput } from './CaptureInput'
-import { useScanCapture, type ScanTarget } from './useScanCapture'
+import { useScanCapture } from './useScanCapture'
+import { useScanTarget } from './useScanTarget'
 import { pendingCount, useCaptureQueueStore } from './queue/captureQueue'
-
-const PROJECT_DETAIL_PATH = /^\/projects\/(?!new$)([^/]+)$/
 
 /** The bottom tab bar's central action: opens the camera, queues the scan, and
  * lands on its draft review once flushed. Scoped to whatever project page it's
  * tapped from, so a scan started inside a project lands there (spec 004 ticket 9).
  * The badge reflects the on-device queue, not just this capture (ticket 10). */
 export function ScanTab() {
-  const location = useLocation()
-  const household = useHouseholdStore((s) => s.household)
+  const target = useScanTarget()
   const queueCount = useCaptureQueueStore((s) => pendingCount(s.records))
-
-  const projectMatch = location.pathname.match(PROJECT_DETAIL_PATH)
-  const target: ScanTarget | null = projectMatch
-    ? { projectId: projectMatch[1]! }
-    : household
-      ? { householdId: household.id }
-      : null
 
   const { capture, uploading, error, queuedMessage, dismissError, dismissQueuedMessage } = useScanCapture(target)
 
