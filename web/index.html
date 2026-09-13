@@ -7,6 +7,13 @@
     <meta name="theme-color" content="#09090b" />
     <title>Household Wizard</title>
 
+    <!-- Lets "Add to Home Screen" launch standalone (no Safari chrome/URL bar). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Household Wizard" />
+
     <!-- Fonts loaded once here. Previously each component @import'd these inside
          an injected <style>, which render-blocks and flashes a fallback serif. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
