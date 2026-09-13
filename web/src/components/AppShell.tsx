@@ -275,7 +275,10 @@ export function AppShell() {
 
         .app-main--phone {
           /* Keeps content clear of the fixed bottom tab bar (its own height
-             plus the safe-area inset already baked into its padding). */
+             plus the safe-area inset already baked into its padding), and
+             clear of the status bar in standalone mode, where there's no
+             browser chrome to push content down for us. */
+          padding-top: env(safe-area-inset-top);
           padding-bottom: calc(64px + env(safe-area-inset-bottom));
         }
       `}</style>
