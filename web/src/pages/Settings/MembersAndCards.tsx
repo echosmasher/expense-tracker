@@ -272,6 +272,8 @@ export function MembersAndCards() {
 
   return (
     <div className="settings-page">
+      <h1 className="settings-page-title">{household?.name ?? 'Household'}</h1>
+
       {/* ── Members ──────────────────────────────────────────────── */}
       <section className="settings-section">
         <div className="settings-section-header">
@@ -369,6 +371,12 @@ export function MembersAndCards() {
           flex-direction: column;
           gap: 2rem;
           font-family: 'Geist', 'DM Sans', sans-serif;
+        }
+        .settings-page-title {
+          font-size: 1.375rem;
+          font-weight: 600;
+          margin: 0 0 -1rem;
+          letter-spacing: -0.025em;
         }
         .settings-section {
           background: var(--bg-card);
