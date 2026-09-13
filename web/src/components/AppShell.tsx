@@ -16,6 +16,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useHouseholdStore } from '../stores/householdStore'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { BottomTabBar } from './BottomTabBar'
+import { OfflineBanner } from './OfflineBanner'
 
 const NAV_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/expenses', label: 'Expenses', icon: Receipt },
@@ -95,6 +96,7 @@ export function AppShell() {
       )}
 
       <main className={isPhone ? 'app-main app-main--phone' : 'app-main'}>
+        <OfflineBanner />
         <Outlet />
       </main>
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { projects } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useProjectStore } from '../../stores/projectStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 export function ProjectList() {
   const navigate = useNavigate()
@@ -10,6 +11,7 @@ export function ProjectList() {
   const { projects: stored, setProjects } = useProjectStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household) return
@@ -41,7 +43,7 @@ export function ProjectList() {
       </div>
 
       {loading && <p className="projects-msg">Loading…</p>}
-      {error && <p className="projects-msg projects-msg--error">{error}</p>}
+      {error && isOnline && <p className="projects-msg projects-msg--error">{error}</p>}
 
       {!loading && stored.length === 0 && (
         <div className="projects-empty">

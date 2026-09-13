@@ -4,6 +4,7 @@ import { expenses } from '@expense-tracker/shared'
 import type { Expense } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
@@ -61,6 +62,7 @@ export function ExpenseList() {
   const { expenses: stored, setExpenses } = useExpenseStore()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household) return
@@ -95,7 +97,7 @@ export function ExpenseList() {
       </div>
 
       {loading && <p className="list-loading">Loading…</p>}
-      {error && <p className="list-error">{error}</p>}
+      {error && isOnline && <p className="list-error">{error}</p>}
       {!loading && !error && stored.length === 0 && (
         <div className="list-empty">
           <p className="list-empty-title">No expenses yet</p>

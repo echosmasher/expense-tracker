@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { categories } from '@expense-tracker/shared'
 import type { CategoryInfo } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 export function CategorySettings() {
   const household = useHouseholdStore((s) => s.household)
@@ -15,6 +16,7 @@ export function CategorySettings() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   async function loadCategories() {
     if (!household) return
@@ -61,7 +63,7 @@ export function CategorySettings() {
       </p>
 
       {loading && <p className="cs-msg">Loading…</p>}
-      {error && <p className="cs-msg cs-msg--error">{error}</p>}
+      {error && isOnline && <p className="cs-msg cs-msg--error">{error}</p>}
 
       {!loading && (
         <div className="cs-list">

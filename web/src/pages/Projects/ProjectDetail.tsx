@@ -4,6 +4,7 @@ import { projects } from '@expense-tracker/shared'
 import type { Project, Expense } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { useProjectStore } from '../../stores/projectStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
@@ -27,6 +28,7 @@ export function ProjectDetail() {
   const [loading, setLoading] = useState(!project)
   const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   const isAdmin = project?.members.find((m) => m.userId === userId)?.role === 'admin'
 
@@ -73,7 +75,7 @@ export function ProjectDetail() {
       </div>
 
       {loading && <p className="pd-msg">Loading…</p>}
-      {error && <p className="pd-msg pd-msg--error">{error}</p>}
+      {error && isOnline && <p className="pd-msg pd-msg--error">{error}</p>}
 
       {project && (
         <>

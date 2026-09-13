@@ -7,6 +7,7 @@ import { statistics } from '@expense-tracker/shared'
 import type { Statistics, CategoryDetail } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useStatsStore } from '../../stores/statsStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 // ─── Colour palette for charts ────────────────────────────────────────────────
 const COLOURS = ['#6366f1', 'var(--accent-light)', '#a5b4fc', '#4ade80', '#34d399', '#f59e0b', '#fb923c', 'var(--danger)']
@@ -56,6 +57,7 @@ export function MonthlyOverview() {
   const [drillCategory, setDrillCategory] = useState<{ id: string | null; name: string } | null>(null)
   const [drillData, setDrillData] = useState<CategoryDetail | null>(null)
   const [drillLoading, setDrillLoading] = useState(false)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household) return
@@ -106,7 +108,7 @@ export function MonthlyOverview() {
       </label>
 
       {loading && <p className="stats-msg">Loading…</p>}
-      {error && <p className="stats-msg stats-msg--error">{error}</p>}
+      {error && isOnline && <p className="stats-msg stats-msg--error">{error}</p>}
 
       {stats && !loading && (
         <>

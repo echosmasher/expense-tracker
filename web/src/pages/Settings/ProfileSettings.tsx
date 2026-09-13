@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { Button } from '../../components/Button'
 import { FormField, Input } from '../../components/FormField'
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 /** Apply a theme to the document and persist it for the next load. */
 function applyTheme(theme: 'light' | 'dark') {
@@ -368,6 +369,7 @@ export function ProfileSettings() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     users.me()
@@ -404,7 +406,7 @@ export function ProfileSettings() {
       <h1 className="ps-page-title">Settings</h1>
 
       {loading && <p className="ps-loading">Loading...</p>}
-      {error && <p className="ps-error">{error}</p>}
+      {error && isOnline && <p className="ps-error">{error}</p>}
 
       {profile && (
         <>

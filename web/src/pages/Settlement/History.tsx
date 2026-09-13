@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { settlements } from '@expense-tracker/shared'
 import type { Settlement, SettlementHistoryRow } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(Math.abs(ore) / 100).toFixed(2).replace('.', ',')}`
@@ -174,6 +175,7 @@ export function History() {
   const [summaries, setSummaries] = useState<SettlementHistoryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household) return
@@ -199,7 +201,7 @@ export function History() {
       </div>
 
       {loading && <p className="history-msg">Loading…</p>}
-      {error && <p className="history-msg history-msg--error">{error}</p>}
+      {error && isOnline && <p className="history-msg history-msg--error">{error}</p>}
 
       {!loading && summaries.length === 0 && (
         <p className="history-msg">No past settlements yet.</p>

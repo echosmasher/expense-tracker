@@ -6,6 +6,7 @@ import {
 import { statistics } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useStatsStore } from '../../stores/statsStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 const COLOURS = ['#6366f1', '#4ade80', '#f59e0b', 'var(--danger)', 'var(--accent-light)', '#34d399', '#fb923c', '#a5b4fc']
 
@@ -36,6 +37,7 @@ export function CategoryTrends() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [view, setView] = useState<'tag' | 'category'>('category')
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household) return
@@ -80,7 +82,7 @@ export function CategoryTrends() {
       </div>
 
       {loading && <p className="trends-msg">Loading…</p>}
-      {error && <p className="trends-msg trends-msg--error">{error}</p>}
+      {error && isOnline && <p className="trends-msg trends-msg--error">{error}</p>}
 
       {!loading && !error && stats && (
         <>

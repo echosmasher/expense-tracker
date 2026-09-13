@@ -5,6 +5,7 @@ import type { Expense, CategoryInfo } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
@@ -175,6 +176,7 @@ export function ExpenseDetail() {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const receiptObjectUrl = useAuthenticatedImage(expense?.receiptImageUrl)
+  const isOnline = useOnlineStatus()
 
   useEffect(() => {
     if (!household || !expenseId) return
@@ -219,7 +221,7 @@ export function ExpenseDetail() {
       </div>
 
       {loading && <p className="detail-loading">Loading…</p>}
-      {error && <p className="detail-error">{error}</p>}
+      {error && isOnline && <p className="detail-error">{error}</p>}
 
       {expense && (
         <>

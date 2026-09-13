@@ -5,6 +5,7 @@ import type { Settlement } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useSettlementStore } from '../../stores/settlementStore'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(Math.abs(ore) / 100).toFixed(2).replace('.', ',')}`
@@ -91,6 +92,7 @@ export function ActiveSettlement() {
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isOnline = useOnlineStatus()
 
   const isAdmin = household?.members.find((m) => m.userId === userId)?.role === 'admin'
 
@@ -149,7 +151,7 @@ export function ActiveSettlement() {
       </div>
 
       {loading && <p className="settlement-loading">Loading…</p>}
-      {error && <p className="settlement-error">{error}</p>}
+      {error && isOnline && <p className="settlement-error">{error}</p>}
 
       {!loading && !currentSettlement && (
         <div className="no-settlement">
