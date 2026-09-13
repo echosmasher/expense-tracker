@@ -57,6 +57,9 @@ jobs:
       - name: Shared tests (settlement calculator)
         run: npm test --workspace=shared
 
+      - name: Web tests (capture queue)
+        run: npm test --workspace=web
+
       - name: Backend tests (auth + household isolation)
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/expense_tracker_test

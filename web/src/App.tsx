@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
+import { initCaptureQueue } from './capture/queue/captureQueue'
 
 // Layout
 import { AppShell } from './components/AppShell'
 import { SplashScreen } from './components/SplashScreen'
 import { More } from './pages/More'
+import { CaptureQueue } from './pages/CaptureQueue'
 
 // Auth
 import { Login } from './pages/Auth/Login'
@@ -63,6 +65,14 @@ function SessionGate({ children }: { children: React.ReactNode }) {
     restoreSession()
   }, [restoreSession])
 
+  // Boot flush is one of the queue's triggers (spec 004 US4); `online` and
+  // returning to the foreground are wired inside initCaptureQueue itself. Wait
+  // for session restore so the first flush attempt has a valid access token
+  // rather than failing every item on a 401 it would just retry anyway.
+  useEffect(() => {
+    if (status === 'authenticated') void initCaptureQueue()
+  }, [status])
+
   if (status === 'loading') return <SplashScreen />
   return <>{children}</>
 }
@@ -102,6 +112,7 @@ export function App() {
             <Route path="/settings/profile" element={<ProfileSettings />} />
             <Route path="/create-household" element={<CreateHousehold />} />
             <Route path="/more" element={<More />} />
+            <Route path="/capture-queue" element={<CaptureQueue />} />
           </Route>
 
           {/* Default */}

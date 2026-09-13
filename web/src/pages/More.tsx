@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { BarChart3, Users, Tag, User, HousePlus, LogOut, type LucideIcon } from 'lucide-react'
+import { BarChart3, Users, Tag, User, HousePlus, LogOut, ScanLine, type LucideIcon } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useHouseholdStore } from '../stores/householdStore'
+import { pendingCount, useCaptureQueueStore } from '../capture/queue/captureQueue'
 
 const MORE_ITEMS: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/statistics', label: 'Statistics', icon: BarChart3 },
@@ -15,6 +16,7 @@ export function More() {
   const navigate = useNavigate()
   const logout = useAuthStore((s) => s.logout)
   const setHousehold = useHouseholdStore((s) => s.setHousehold)
+  const queueCount = useCaptureQueueStore((s) => pendingCount(s.records))
 
   async function handleLogout() {
     await logout()
@@ -27,6 +29,12 @@ export function More() {
       <h1 className="more-title">More</h1>
 
       <nav className="more-list">
+        <NavLink to="/capture-queue" className="more-item">
+          <ScanLine className="more-icon" size={19} strokeWidth={1.75} aria-hidden="true" />
+          <span className="more-label">Capture queue</span>
+          {queueCount > 0 && <span className="more-badge">{queueCount}</span>}
+        </NavLink>
+
         {MORE_ITEMS.map((item) => (
           <NavLink key={item.to} to={item.to} className="more-item">
             <item.icon className="more-icon" size={19} strokeWidth={1.75} aria-hidden="true" />
@@ -77,6 +85,21 @@ export function More() {
         .more-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
         .more-icon { opacity: 0.7; flex-shrink: 0; }
         .more-item--danger { color: var(--danger); }
+        .more-badge {
+          margin-left: auto;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: var(--danger);
+          color: #fff;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          line-height: 1;
+        }
       `}</style>
     </div>
   )
