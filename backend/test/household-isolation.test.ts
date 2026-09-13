@@ -8,6 +8,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
 import bcrypt from 'bcrypt'
+import sharp from 'sharp'
+import { randomUUID } from 'node:crypto'
 
 // Email goes out on settlement creation; never hit the network from tests.
 vi.mock('../src/services/email.js', () => ({
@@ -15,8 +17,29 @@ vi.mock('../src/services/email.js', () => ({
   sendSettlementReadyEmail: vi.fn(async () => {}),
 }))
 
+// from-receipt calls OpenAI twice (parse, categorize); never hit the network
+// from tests — stub both to a deterministic result.
+vi.mock('../src/services/receiptParser.js', () => ({
+  parseReceipt: vi.fn(async () => ({
+    store: 'Test Receipt Store',
+    date: '2026-06-01',
+    detectedCardLastFour: null,
+    items: [{ description: 'Bread', quantity: 1, unitPriceOre: 3000, confidenceLow: false }],
+  })),
+}))
+vi.mock('../src/services/categorizer.js', () => ({
+  categorizeWithAI: vi.fn(async (items: Array<{ index: number }>) =>
+    items.map((i) => ({ index: i.index, category: 'Groceries', confidence: 'high' as const }))
+  ),
+}))
+
 import { app } from '../src/app.js'
 import { db } from '../src/db/client.js'
+
+/** A minimal, real, decodable JPEG — sanitizeImage rejects anything else. */
+async function fakeReceiptImage(): Promise<Buffer> {
+  return sharp({ create: { width: 32, height: 32, channels: 3, background: 'white' } }).jpeg().toBuffer()
+}
 
 interface TestUser {
   id: string
@@ -105,6 +128,10 @@ let projectA: string
 let projectExpenseA: string
 let categoryA: string
 let cardA: string
+let draftA: string // pending_review household expense, one line item
+let draftLineItemA: string
+let projectB: string // Bob's own project, used for ID-stuffing tests
+let projectDraftA: string // pending_review project expense, one line item (via from-receipt)
 
 beforeAll(async () => {
   // Start from an empty test database.
@@ -172,6 +199,40 @@ beforeAll(async () => {
     .send({ lastFour: '4242', label: 'Alice visa' })
   expect(cardRes.status).toBe(201)
   cardA = cardRes.body.id
+
+  // A draft (pending_review) household expense with one line item, for the
+  // draft-editing route tests — created but never confirmed.
+  const draftRes = await request(app)
+    .post(`/api/v1/households/${householdA}/expenses`)
+    .set('Authorization', `Bearer ${alice.token}`)
+    .send({
+      store: 'Draft Store',
+      purchasedBy: alice.id,
+      lineItems: [{ description: 'Eggs', quantity: 1, unitPriceOre: 4_000 }],
+    })
+  expect(draftRes.status).toBe(201)
+  expect(draftRes.body.status).toBe('pending_review')
+  draftA = draftRes.body.id
+  draftLineItemA = draftRes.body.lineItems[0].id
+
+  // Bob's own project, for ID-stuffing tests (own project URL, foreign resource id).
+  const projectBRes = await request(app)
+    .post(`/api/v1/households/${householdB}/projects`)
+    .set('Authorization', `Bearer ${bob.token}`)
+    .send({ name: 'Bob solo project', memberIds: [bob.id], allocationKey: [{ userId: bob.id, shareBp: 10_000 }] })
+  expect(projectBRes.status).toBe(201)
+  projectB = projectBRes.body.id
+
+  // A draft project expense, created the same way a scan will: from-receipt.
+  const image = await fakeReceiptImage()
+  const projectDraftRes = await request(app)
+    .post(`/api/v1/projects/${projectA}/expenses/from-receipt`)
+    .set('Authorization', `Bearer ${alice.token}`)
+    .field('captureId', randomUUID())
+    .attach('receipt', image, { filename: 'receipt.jpg', contentType: 'image/jpeg' })
+  expect(projectDraftRes.status).toBe(201)
+  expect(projectDraftRes.body.status).toBe('pending_review')
+  projectDraftA = projectDraftRes.body.id
 })
 
 afterAll(async () => {
@@ -188,7 +249,9 @@ describe('sanity: household A members can access household A', () => {
       .get(`/api/v1/households/${householdA}/expenses`)
       .set('Authorization', `Bearer ${anna.token}`)
     expect(res.status).toBe(200)
-    expect(res.body.expenses).toHaveLength(1)
+    // expenseA (confirmed) + draftA (pending_review, added by the draft-editing fixture).
+    expect(res.body.expenses).toHaveLength(2)
+    expect(res.body.expenses.map((e: { id: string }) => e.id)).toContain(expenseA)
   })
 
   it('member of A can read the A expense detail', async () => {
@@ -429,6 +492,11 @@ describe('household isolation: projects', () => {
     expect(res.status).toBe(403)
   })
 
+  it('cannot read a single expense from another project', async () => {
+    const res = await asBob(request(app).get(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}`))
+    expect(res.status).toBe(403)
+  })
+
   it('cannot add expenses to another household’s project', async () => {
     const res = await asBob(
       request(app)
@@ -507,19 +575,188 @@ describe('household isolation: categories', () => {
   })
 })
 
-// ─── Receipt parsing ──────────────────────────────────────────────────────────
+// ─── Draft creation from a receipt ─────────────────────────────────────────────
 
-describe('household isolation: receipts', () => {
-  it('cannot parse a receipt into another household', async () => {
-    // Membership is checked before any upload/AI call, so no external
-    // services are reached and the request dies with 403.
+describe('household isolation: from-receipt', () => {
+  it('cannot create a draft from a receipt in another household', async () => {
+    const image = await fakeReceiptImage()
     const res = await asBob(
       request(app)
-        .post(`/api/v1/receipts/parse?householdId=${householdA}`)
-        .attach('receipt', Buffer.from('fake-image-bytes'), {
-          filename: 'receipt.jpg',
-          contentType: 'image/jpeg',
-        })
+        .post(`/api/v1/households/${householdA}/expenses/from-receipt`)
+        .field('captureId', randomUUID())
+        .attach('receipt', image, { filename: 'receipt.jpg', contentType: 'image/jpeg' })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot create a draft from a receipt in another household’s project', async () => {
+    const image = await fakeReceiptImage()
+    const res = await asBob(
+      request(app)
+        .post(`/api/v1/projects/${projectA}/expenses/from-receipt`)
+        .field('captureId', randomUUID())
+        .attach('receipt', image, { filename: 'receipt.jpg', contentType: 'image/jpeg' })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('replaying the same captureId returns the existing draft and creates nothing else (SC-009)', async () => {
+    const captureId = randomUUID()
+    const image = await fakeReceiptImage()
+
+    const first = await request(app)
+      .post(`/api/v1/households/${householdA}/expenses/from-receipt`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .field('captureId', captureId)
+      .attach('receipt', image, { filename: 'r.jpg', contentType: 'image/jpeg' })
+    expect(first.status).toBe(201)
+
+    const replay = await request(app)
+      .post(`/api/v1/households/${householdA}/expenses/from-receipt`)
+      .set('Authorization', `Bearer ${alice.token}`)
+      .field('captureId', captureId)
+      .attach('receipt', image, { filename: 'r.jpg', contentType: 'image/jpeg' })
+    expect(replay.status).toBe(200)
+    expect(replay.body.id).toBe(first.body.id)
+
+    const count = await db.query<{ count: string }>(
+      'SELECT count(*) FROM expenses WHERE household_id = $1 AND capture_id = $2',
+      [householdA, captureId]
+    )
+    expect(Number(count.rows[0]!.count)).toBe(1)
+  })
+
+  it('rejects confirming a draft with zero line items (409 EMPTY_EXPENSE)', async () => {
+    const bare = await db.query<{ id: string }>(
+      `INSERT INTO expenses (household_id, purchased_by, total_amount_ore, status)
+       VALUES ($1, $2, 0, 'pending_review') RETURNING id`,
+      [householdA, alice.id]
+    )
+    const res = await request(app)
+      .post(`/api/v1/households/${householdA}/expenses/${bare.rows[0]!.id}/confirm`)
+      .set('Authorization', `Bearer ${alice.token}`)
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe('EMPTY_EXPENSE')
+  })
+})
+
+// ─── Draft editing ──────────────────────────────────────────────────────────────
+
+describe('household isolation: draft editing', () => {
+  it('cannot edit another household’s draft fields', async () => {
+    const res = await asBob(
+      request(app).patch(`/api/v1/households/${householdA}/expenses/${draftA}`).send({ store: 'Hacked' })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot edit a foreign draft through own household URL (ID stuffing)', async () => {
+    const res = await asBob(
+      request(app).patch(`/api/v1/households/${householdB}/expenses/${draftA}`).send({ store: 'Hacked' })
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('cannot add a line item to another household’s draft', async () => {
+    const res = await asBob(
+      request(app)
+        .post(`/api/v1/households/${householdA}/expenses/${draftA}/line-items`)
+        .send({ description: 'Sneaky', quantity: 1, unitPriceOre: 100 })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot add a line item to a foreign draft through own household URL', async () => {
+    const res = await asBob(
+      request(app)
+        .post(`/api/v1/households/${householdB}/expenses/${draftA}/line-items`)
+        .send({ description: 'Sneaky', quantity: 1, unitPriceOre: 100 })
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('cannot delete a line item from another household’s draft', async () => {
+    const res = await asBob(
+      request(app).delete(`/api/v1/households/${householdA}/expenses/${draftA}/line-items/${draftLineItemA}`)
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot delete a foreign draft’s line item through own household URL', async () => {
+    const res = await asBob(
+      request(app).delete(`/api/v1/households/${householdB}/expenses/${draftA}/line-items/${draftLineItemA}`)
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('household isolation: project draft editing', () => {
+  it('cannot edit another household’s project draft fields', async () => {
+    const res = await asBob(
+      request(app).patch(`/api/v1/projects/${projectA}/expenses/${projectDraftA}`).send({ store: 'Hacked' })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot add a line item to another household’s project draft', async () => {
+    const res = await asBob(
+      request(app)
+        .post(`/api/v1/projects/${projectA}/expenses/${projectDraftA}/line-items`)
+        .send({ description: 'Sneaky', quantity: 1, unitPriceOre: 100 })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot edit a line item on another household’s project draft', async () => {
+    const lineItemRes = await request(app)
+      .get(`/api/v1/projects/${projectA}/expenses/${projectDraftA}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+    const lineItemId = lineItemRes.body.lineItems[0].id
+
+    const res = await asBob(
+      request(app)
+        .patch(`/api/v1/projects/${projectA}/expenses/${projectDraftA}/line-items/${lineItemId}`)
+        .send({ unitPriceOre: 1 })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot delete a line item from another household’s project draft', async () => {
+    const lineItemRes = await request(app)
+      .get(`/api/v1/projects/${projectA}/expenses/${projectDraftA}`)
+      .set('Authorization', `Bearer ${alice.token}`)
+    const lineItemId = lineItemRes.body.lineItems[0].id
+
+    const res = await asBob(
+      request(app).delete(`/api/v1/projects/${projectA}/expenses/${projectDraftA}/line-items/${lineItemId}`)
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot edit a foreign project’s draft through own project URL (ID stuffing)', async () => {
+    const res = await asBob(
+      request(app).patch(`/api/v1/projects/${projectB}/expenses/${projectDraftA}`).send({ store: 'Hacked' })
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('cannot add a line item to a foreign project’s draft through own project URL', async () => {
+    const res = await asBob(
+      request(app)
+        .post(`/api/v1/projects/${projectB}/expenses/${projectDraftA}/line-items`)
+        .send({ description: 'Sneaky', quantity: 1, unitPriceOre: 100 })
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('cannot read a foreign project’s draft through own project URL', async () => {
+    const res = await asBob(request(app).get(`/api/v1/projects/${projectB}/expenses/${projectDraftA}`))
+    expect(res.status).toBe(404)
+  })
+
+  it('cannot confirm another household’s project draft', async () => {
+    const res = await asBob(
+      request(app).post(`/api/v1/projects/${projectA}/expenses/${projectDraftA}/confirm`)
     )
     expect(res.status).toBe(403)
   })

@@ -223,39 +223,12 @@ export const households = {
     }),
 }
 
-// ─── Receipts ────────────────────────────────────────────────────────────────
-
-export interface ParsedReceipt {
-  receiptImageKey: string
-  store: string | null
-  date: string | null
-  detectedCardLastFour: string | null
-  items: Array<{
-    description: string
-    quantity: number
-    unitPriceOre: number
-    confidenceLow: boolean
-    categoryId?: string | null
-    categoryName?: string
-  }>
-}
-
-export const receipts = {
-  parse: (householdId: string, file: File) => {
-    const form = new FormData()
-    form.append('receipt', file)
-    return request<ParsedReceipt>(`/receipts/parse?householdId=${encodeURIComponent(householdId)}`, {
-      method: 'POST',
-      body: form,
-    })
-  },
-}
-
 // ─── Expenses ────────────────────────────────────────────────────────────────
 
 export interface Expense {
   id: string
-  householdId: string
+  householdId: string | null
+  projectId: string | null
   purchasedBy: string
   purchaserName: string
   receiptImageKey: string | null
@@ -265,6 +238,7 @@ export interface Expense {
   totalAmountOre: number
   cardLastFour: string | null
   status: 'pending_review' | 'confirmed' | 'settled'
+  captureId: string | null
   createdAt: string
   lineItems: Array<{
     id: string
@@ -276,6 +250,15 @@ export interface Expense {
     categoryId: string | null
     categoryName: string | null
   }>
+}
+
+export interface DraftLineItemInput {
+  description: string
+  quantity: number
+  unitPriceOre: number
+  tagId?: string | undefined
+  isPersonal?: boolean | undefined
+  categoryId?: string | undefined
 }
 
 export const expenses = {
@@ -304,12 +287,37 @@ export const expenses = {
   confirm: (householdId: string, expenseId: string) =>
     request<Expense>(`/households/${householdId}/expenses/${expenseId}/confirm`, { method: 'POST' }),
   updateLineItem: (householdId: string, expenseId: string, lineItemId: string, body: {
-    unitPriceOre?: number; quantity?: number; description?: string
+    unitPriceOre?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
   }) =>
     request<Expense['lineItems'][0] & { newTotalAmountOre: number }>(
       `/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}`,
       { method: 'PATCH', body: JSON.stringify(body) }
     ),
+
+  /** One call sanitises, stores, parses, matches the card, and categorises a
+   * receipt, then creates (or, on a replayed captureId, returns) a draft. */
+  createFromReceipt: (householdId: string, file: Blob, captureId: string) => {
+    const form = new FormData()
+    form.append('receipt', file)
+    form.append('captureId', captureId)
+    return request<Expense>(`/households/${householdId}/expenses/from-receipt`, { method: 'POST', body: form })
+  },
+
+  update: (householdId: string, expenseId: string, body: {
+    store?: string; date?: string; purchasedBy?: string; cardLastFour?: string
+  }) =>
+    request<Expense>(`/households/${householdId}/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  addLineItem: (householdId: string, expenseId: string, body: DraftLineItemInput) =>
+    request<Expense>(`/households/${householdId}/expenses/${expenseId}/line-items`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  deleteLineItem: (householdId: string, expenseId: string, lineItemId: string) =>
+    request<Expense>(`/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}`, {
+      method: 'DELETE',
+    }),
 }
 
 // ─── Settlements ─────────────────────────────────────────────────────────────
@@ -391,6 +399,42 @@ export const projects = {
     request<{ expenses: Expense[] }>(`/projects/${projectId}/expenses`),
   createExpense: (projectId: string, body: unknown) =>
     request<Expense>(`/projects/${projectId}/expenses`, { method: 'POST', body: JSON.stringify(body) }),
+  getExpense: (projectId: string, expenseId: string) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}`),
+
+  createExpenseFromReceipt: (projectId: string, file: Blob, captureId: string) => {
+    const form = new FormData()
+    form.append('receipt', file)
+    form.append('captureId', captureId)
+    return request<Expense>(`/projects/${projectId}/expenses/from-receipt`, { method: 'POST', body: form })
+  },
+
+  updateExpense: (projectId: string, expenseId: string, body: {
+    store?: string; date?: string; purchasedBy?: string; cardLastFour?: string
+  }) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  confirmExpense: (projectId: string, expenseId: string) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}/confirm`, { method: 'POST' }),
+
+  addLineItem: (projectId: string, expenseId: string, body: DraftLineItemInput) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateLineItem: (projectId: string, expenseId: string, lineItemId: string, body: {
+    unitPriceOre?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
+  }) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items/${lineItemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteLineItem: (projectId: string, expenseId: string, lineItemId: string) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items/${lineItemId}`, {
+      method: 'DELETE',
+    }),
 }
 
 // ─── Statistics ──────────────────────────────────────────────────────────────

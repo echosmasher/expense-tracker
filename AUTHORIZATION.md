@@ -38,17 +38,25 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 | `POST /households/:id/invites` | ✗ | ✗ | ✗ ✓test | ✗ | ✓; invitee must not already be a member ✓test |
 | Expenses: list, read, create, confirm, edit line items | ✗ ✓test | ✗ | ✗ | ✓ household-scoped ✓test | ✓ |
 | — `purchasedBy` on create | must be a member of the same household, else 400 `INVALID_PURCHASER` ✓test | | | | |
+| — confirm on a zero-line-item draft | rejected: 409 `EMPTY_EXPENSE` ✓test | | | | |
+| `POST /households/:id/expenses/from-receipt` | ✗ ✓test | ✗ | ✗ | ✓ household-scoped, rate-limited ✓test | ✓ |
+| — replay of the same `captureId` | returns the existing draft (200), creates nothing else ✓test | | | | |
+| `PATCH /households/:id/expenses/:id`, line-item add/delete | ✗ ✓test | ✗ | ✗ | ✓ household-scoped; draft (`pending_review`) only, else 409 `INVALID_STATUS` ✓test | ✓ |
+| `PATCH .../line-items/:id` (price, qty, description, personal flag, category) | not status-gated — also used to correct an already-confirmed expense | | | | |
 | Settlements: list, read | ✗ | ✗ | ✗ | ✓ scoped ✓test | ✓ |
 | Settlements: trigger (`POST`) | ✗ | ✗ | ✗ | ✗ ✓test | ✓, max one open per household |
 | Mark settlement transaction paid | ✗ | ✗ | only the debtor, the creditor, or the household admin; only while settlement is open ✓test | | |
 | Projects: create in household | ✗ | ✗ | ✓; `memberIds` must all be household members, else 400 `INVALID_MEMBERS` ✓test | ✓ | ✓ |
-| Projects: read, list/add expenses | ✗ | ✗ project member only ✓test | | | |
+| Projects: read, list/add/read-one expenses | ✗ | ✗ project member only ✓test | | | |
 | — project expense `purchasedBy` | must be a project member, else 400 `INVALID_PURCHASER` ✓test | | | | |
+| `POST /projects/:id/expenses/from-receipt` | ✗ | ✗ project member only ✓test, rate-limited | | | |
+| — replay of the same `captureId` | returns the existing draft (200), creates nothing else | | | | |
+| `PATCH /projects/:id/expenses/:id`, line-item add/edit/delete, confirm | ✗ | ✗ project member only ✓test; draft (`pending_review`) only, else 409 `INVALID_STATUS` | | | |
+| — confirm on a zero-line-item project draft | rejected: 409 `EMPTY_EXPENSE` | | | | |
 | Projects: finish (trigger settlement) | ✗ | ✗ | project **admin** only ✓test | | |
 | Statistics (overview, drill-down, CSV export) | ✗ | ✗ | ✗ | ✓ scoped ✓test | ✓ |
 | Categories: list | ✗ | ✗ | ✓ ✓test | ✓ | ✓ |
 | Categories: rename / delete | ✗ | ✗ | ✗ ✓test | ✗ | ✓; system categories immutable (400) |
-| `POST /receipts/parse?householdId=` | ✗ | ✗ membership checked **before** upload/AI call ✓test | ✓ | ✓ | ✓ |
 | `GET /households/:id/expenses/:id/receipt` | ✗ ✓test | ✗ | ✗ ✓test | ✓ household-scoped ✓test; 404 if the expense has no receipt | ✓ |
 | `GET /projects/:id/expenses/:id/receipt` | ✗ ✓test | ✗ project member only ✓test; 404 if the expense has no receipt | | | |
 | `GET /users/me/avatar` | ✗ ✓test | ✓ self only ✓test; 404 if no avatar set | | | |

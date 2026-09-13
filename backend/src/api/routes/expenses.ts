@@ -5,6 +5,11 @@ import { AppError } from '../middleware/error.js'
 import { db } from '../../db/client.js'
 import { streamImage } from '../streamImage.js'
 import { tagLineItems } from '../../services/tagMatcher.js'
+import { receiptUpload } from '../receiptUpload.js'
+import { receiptParseLimiter } from '../middleware/rateLimit.js'
+import { intakeReceipt } from '../../services/receiptIntake.js'
+import { createDraftFromIntake } from '../../services/draftExpense.js'
+import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate } from '../../services/expenseView.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -21,6 +26,19 @@ async function requireActiveMember(householdId: string, userId: string) {
   const row = result.rows[0]
   if (!row) throw new AppError(403, 'FORBIDDEN', 'Not a member of this household')
   if (row.status !== 'active') throw new AppError(403, 'HOUSEHOLD_NOT_ACTIVE', 'Household is not yet active')
+}
+
+/** Draft edit routes only operate on a pending_review expense in this household. */
+async function requireDraftExpense(householdId: string, expenseId: string): Promise<void> {
+  const expCheck = await db.query<{ status: string }>(
+    'SELECT status FROM expenses WHERE id = $1 AND household_id = $2',
+    [expenseId, householdId]
+  )
+  const expense = expCheck.rows[0]
+  if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+  if (expense.status !== 'pending_review') {
+    throw new AppError(409, 'INVALID_STATUS', 'Only a draft can be edited')
+  }
 }
 
 // ─── POST /households/:householdId/expenses ───────────────────────────────────
@@ -137,7 +155,7 @@ router.post('/', async (req, res, next) => {
       return expenseId
     })
 
-    const fullExpense = await getFullExpense(expense, householdId)
+    const fullExpense = await getFullExpense(expense, { householdId })
     res.status(201).json(fullExpense)
   } catch (err) {
     next(err)
@@ -210,7 +228,7 @@ router.get('/:expenseId', async (req, res, next) => {
     const userId = req.user!.userId
     await requireActiveMember(householdId, userId)
 
-    const expense = await getFullExpense(expenseId, householdId)
+    const expense = await getFullExpense(expenseId, { householdId })
     if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
 
     res.json(expense)
@@ -258,12 +276,17 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
       throw new AppError(409, 'INVALID_STATUS', 'Only pending_review expenses can be confirmed')
     }
 
+    const lineItemCount = await db.query('SELECT 1 FROM line_items WHERE expense_id = $1 LIMIT 1', [expenseId])
+    if (lineItemCount.rows.length === 0) {
+      throw new AppError(409, 'EMPTY_EXPENSE', 'A draft needs at least one line item before it can be confirmed')
+    }
+
     await db.query(
       "UPDATE expenses SET status = 'confirmed', updated_at = now() WHERE id = $1",
       [expenseId]
     )
 
-    const updated = await getFullExpense(expenseId, householdId)
+    const updated = await getFullExpense(expenseId, { householdId })
     res.json(updated)
   } catch (err) {
     next(err)
@@ -276,9 +299,9 @@ const UpdateLineItemSchema = z.object({
   unitPriceOre: z.number().int().min(0).optional(),
   quantity: z.number().int().min(1).optional(),
   description: z.string().min(1).optional(),
-}).refine((d) => d.unitPriceOre !== undefined || d.quantity !== undefined || d.description !== undefined, {
-  message: 'At least one field must be provided',
-})
+  isPersonal: z.boolean().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'At least one field must be provided' })
 
 const lineItemRouter = Router({ mergeParams: true })
 lineItemRouter.use(requireAuth)
@@ -314,20 +337,12 @@ lineItemRouter.patch('/', async (req, res, next) => {
     if (body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
     if (body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
     if (body.description !== undefined) { sets.push(`description = $${i++}`); params.push(body.description) }
+    if (body.isPersonal !== undefined) { sets.push(`is_personal = $${i++}`); params.push(body.isPersonal) }
+    if (body.categoryId !== undefined) { sets.push(`category_id = $${i++}`); params.push(body.categoryId) }
     params.push(lineItemId)
 
     await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
-
-    // Recalculate expense total from non-personal line items
-    const totalResult = await db.query<{ total: string }>(
-      `SELECT COALESCE(SUM(unit_price_ore * quantity), 0)::bigint as total
-       FROM line_items WHERE expense_id = $1 AND is_personal = false`,
-      [expenseId]
-    )
-    await db.query(
-      'UPDATE expenses SET total_amount_ore = $1 WHERE id = $2',
-      [parseInt(totalResult.rows[0]!.total, 10), expenseId]
-    )
+    const newTotalAmountOre = await recomputeExpenseTotal(expenseId)
 
     // Return updated line item
     const updated = await db.query<{
@@ -350,8 +365,33 @@ lineItemRouter.patch('/', async (req, res, next) => {
       isPersonal: li.is_personal,
       categoryId: li.category_id,
       categoryName: li.category_name,
-      newTotalAmountOre: parseInt(totalResult.rows[0]!.total, 10),
+      newTotalAmountOre,
     })
+  } catch (err) {
+    next(err)
+  }
+})
+
+lineItemRouter.delete('/', async (req, res, next) => {
+  try {
+    const { householdId, expenseId, lineItemId } = req.params as {
+      householdId: string; expenseId: string; lineItemId: string
+    }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+    await requireDraftExpense(householdId, expenseId)
+
+    const liCheck = await db.query(
+      'SELECT id FROM line_items WHERE id = $1 AND expense_id = $2',
+      [lineItemId, expenseId]
+    )
+    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+
+    await db.query('DELETE FROM line_items WHERE id = $1', [lineItemId])
+    await recomputeExpenseTotal(expenseId)
+
+    const updated = await getFullExpense(expenseId, { householdId })
+    res.json(updated)
   } catch (err) {
     next(err)
   }
@@ -359,76 +399,92 @@ lineItemRouter.patch('/', async (req, res, next) => {
 
 export { lineItemRouter }
 
-// ─── Helper: fetch full expense with line items and signed receipt URL ────────
+// ─── POST /households/:householdId/expenses/from-receipt ─────────────────────
+// One call sanitises, stores, parses, matches the card, and categorises an
+// uploaded receipt, then creates a pending_review draft with zero or more
+// line items — idempotent per client-generated captureId (SC-009).
 
-async function getFullExpense(expenseId: string, householdId: string) {
-  const expResult = await db.query<{
-    id: string
-    household_id: string
-    purchased_by: string
-    purchaser_name: string
-    receipt_image_key: string | null
-    store: string | null
-    expense_date: string | null
-    total_amount_ore: number
-    card_last_four: string | null
-    status: string
-    created_at: Date
-  }>(
-    `SELECT e.*, u.name as purchaser_name
-     FROM expenses e JOIN users u ON u.id = e.purchased_by
-     WHERE e.id = $1 AND e.household_id = $2`,
-    [expenseId, householdId]
-  )
-  const expense = expResult.rows[0]
-  if (!expense) return null
+const FromReceiptSchema = z.object({
+  captureId: z.string().uuid('captureId must be a UUID'),
+})
 
-  const itemsResult = await db.query<{
-    id: string
-    description: string
-    quantity: number
-    unit_price_ore: number
-    tag_id: string | null
-    is_personal: boolean
-    category_id: string | null
-    category_name: string | null
-  }>(
-    `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
-            li.category_id, c.name as category_name
-     FROM line_items li
-     LEFT JOIN categories c ON c.id = li.category_id
-     WHERE li.expense_id = $1 ORDER BY li.id`,
-    [expenseId]
-  )
+router.post('/from-receipt', receiptParseLimiter, receiptUpload.single('receipt'), async (req, res, next) => {
+  try {
+    const { householdId } = req.params as { householdId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
 
-  const receiptImageUrl = expense.receipt_image_key
-    ? `/households/${householdId}/expenses/${expenseId}/receipt`
-    : null
+    if (!req.file) throw new AppError(400, 'NO_FILE', 'No receipt file uploaded')
+    const { captureId } = FromReceiptSchema.parse(req.body)
 
-  return {
-    id: expense.id,
-    householdId: expense.household_id,
-    purchasedBy: expense.purchased_by,
-    purchaserName: expense.purchaser_name,
-    receiptImageKey: expense.receipt_image_key,
-    receiptImageUrl,
-    store: expense.store,
-    date: expense.expense_date,
-    totalAmountOre: expense.total_amount_ore,
-    cardLastFour: expense.card_last_four,
-    status: expense.status,
-    createdAt: expense.created_at,
-    lineItems: itemsResult.rows.map((li) => ({
-      id: li.id,
-      description: li.description,
-      quantity: li.quantity,
-      unitPriceOre: li.unit_price_ore,
-      tagId: li.tag_id,
-      isPersonal: li.is_personal,
-      categoryId: li.category_id,
-      categoryName: li.category_name,
-    })),
+    const intake = await intakeReceipt(householdId, `receipts/${householdId}`, req.file.buffer)
+    const { expenseId, created } = await createDraftFromIntake({ householdId }, householdId, userId, captureId, intake)
+
+    const fullExpense = await getFullExpense(expenseId, { householdId })
+    res.status(created ? 201 : 200).json(fullExpense)
+  } catch (err) {
+    next(err)
   }
-}
+})
+
+// ─── PATCH /households/:householdId/expenses/:expenseId ──────────────────────
+// Draft-only field edits (store, date, purchaser, card). Line-item mutations
+// have their own routes below.
+
+router.patch('/:expenseId', async (req, res, next) => {
+  try {
+    const { householdId, expenseId } = req.params as { householdId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+    await requireDraftExpense(householdId, expenseId)
+
+    const body = UpdateExpenseSchema.parse(req.body)
+
+    if (body.purchasedBy !== undefined) {
+      const purchaserCheck = await db.query(
+        'SELECT id FROM household_members WHERE household_id = $1 AND user_id = $2',
+        [householdId, body.purchasedBy]
+      )
+      if (purchaserCheck.rows.length === 0) {
+        throw new AppError(400, 'INVALID_PURCHASER', 'purchasedBy must be a member of this household')
+      }
+    }
+
+    const { sets, params } = buildExpenseUpdate(body)
+    params.push(expenseId)
+
+    await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+
+    const updated = await getFullExpense(expenseId, { householdId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /households/:householdId/expenses/:expenseId/line-items ────────────
+
+router.post('/:expenseId/line-items', async (req, res, next) => {
+  try {
+    const { householdId, expenseId } = req.params as { householdId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+    await requireDraftExpense(householdId, expenseId)
+
+    const body = LineItemSchema.parse(req.body)
+
+    await db.query(
+      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, tag_id, is_personal, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [expenseId, body.description, body.quantity, body.unitPriceOre, body.tagId ?? null, body.isPersonal, body.categoryId ?? null]
+    )
+    await recomputeExpenseTotal(expenseId)
+
+    const updated = await getFullExpense(expenseId, { householdId })
+    res.status(201).json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
 
 export { router as expensesRouter }

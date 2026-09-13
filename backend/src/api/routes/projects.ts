@@ -5,6 +5,11 @@ import { requireAuth } from '../middleware/auth.js'
 import { AppError } from '../middleware/error.js'
 import { streamImage } from '../streamImage.js'
 import { calculateSettlement } from '@expense-tracker/shared'
+import { receiptUpload } from '../receiptUpload.js'
+import { receiptParseLimiter } from '../middleware/rateLimit.js'
+import { intakeReceipt } from '../../services/receiptIntake.js'
+import { createDraftFromIntake } from '../../services/draftExpense.js'
+import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate } from '../../services/expenseView.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -200,36 +205,49 @@ projectDetailRouter.get('/', async (req, res, next) => {
 // ─── POST /projects/:projectId/expenses ──────────────────────────────────────
 // ─── GET /projects/:projectId/expenses ───────────────────────────────────────
 
+const ProjectLineItemSchema = z.object({
+  description: z.string().min(1),
+  quantity: z.number().int().positive(),
+  unitPriceOre: z.number().int(),
+  isPersonal: z.boolean().default(false),
+  categoryId: z.string().uuid().optional(),
+})
+
+async function requirePurchaserIsProjectMember(projectId: string, purchasedBy: string) {
+  const purchaserCheck = await db.query(
+    'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2',
+    [projectId, purchasedBy]
+  )
+  if (purchaserCheck.rows.length === 0) {
+    throw new AppError(400, 'INVALID_PURCHASER', 'purchasedBy must be a member of this project')
+  }
+}
+
+async function getProjectHouseholdId(projectId: string): Promise<string> {
+  const result = await db.query<{ household_id: string }>('SELECT household_id FROM projects WHERE id = $1', [projectId])
+  const row = result.rows[0]
+  if (!row) throw new AppError(404, 'NOT_FOUND', 'Project not found')
+  return row.household_id
+}
+
 projectDetailRouter.post('/expenses', async (req, res, next) => {
   try {
     const { projectId } = req.params as { projectId: string }
     const userId = req.user!.userId
     await requireProjectMember(projectId, userId)
 
-    const LineItemSchema = z.object({
-      description: z.string().min(1),
-      quantity: z.number().int().positive(),
-      unitPriceOre: z.number().int(),
-      isPersonal: z.boolean().default(false),
-    })
     const body = z.object({
       store: z.string().optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       purchasedBy: z.string().uuid(),
       receiptImageKey: z.string().optional(),
       cardLastFour: z.string().optional(),
-      lineItems: z.array(LineItemSchema).min(1),
+      lineItems: z.array(ProjectLineItemSchema).min(1),
     }).parse(req.body)
 
     // purchasedBy must be a project member — otherwise the expense would credit
     // someone outside the project when the settlement is calculated.
-    const purchaserCheck = await db.query(
-      'SELECT id FROM project_members WHERE project_id = $1 AND user_id = $2',
-      [projectId, body.purchasedBy]
-    )
-    if (purchaserCheck.rows.length === 0) {
-      throw new AppError(400, 'INVALID_PURCHASER', 'purchasedBy must be a member of this project')
-    }
+    await requirePurchaserIsProjectMember(projectId, body.purchasedBy)
 
     // Exclude personal items — total_amount_ore is the project-billable amount
     const totalAmountOre = body.lineItems.reduce(
@@ -256,18 +274,15 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       const eid = expResult.rows[0]!.id
       for (const li of body.lineItems) {
         await client.query(
-          'INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal) VALUES ($1,$2,$3,$4,$5)',
-          [eid, li.description, li.quantity, li.unitPriceOre, li.isPersonal]
+          'INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal, category_id) VALUES ($1,$2,$3,$4,$5,$6)',
+          [eid, li.description, li.quantity, li.unitPriceOre, li.isPersonal, li.categoryId ?? null]
         )
       }
       return eid
     })
 
-    const exp = await db.query(
-      `SELECT e.*, u.name as purchaser_name FROM expenses e JOIN users u ON u.id = e.purchased_by WHERE e.id = $1`,
-      [expenseId]
-    )
-    res.status(201).json(exp.rows[0])
+    const fullExpense = await getFullExpense(expenseId, { projectId })
+    res.status(201).json(fullExpense)
   } catch (err) {
     next(err)
   }
@@ -279,13 +294,239 @@ projectDetailRouter.get('/expenses', async (req, res, next) => {
     const userId = req.user!.userId
     await requireProjectMember(projectId, userId)
 
-    const result = await db.query(
-      `SELECT e.*, u.name as purchaser_name FROM expenses e
-       JOIN users u ON u.id = e.purchased_by
-       WHERE e.project_id = $1 ORDER BY e.expense_date DESC`,
+    const result = await db.query<{
+      id: string
+      purchased_by: string
+      store: string | null
+      expense_date: string | null
+      total_amount_ore: number
+      card_last_four: string | null
+      status: string
+      created_at: Date
+      purchaser_name: string
+    }>(
+      `SELECT e.id, e.purchased_by, e.store, e.expense_date, e.total_amount_ore,
+              e.card_last_four, e.status, e.created_at, u.name as purchaser_name
+       FROM expenses e JOIN users u ON u.id = e.purchased_by
+       WHERE e.project_id = $1 ORDER BY e.expense_date DESC, e.created_at DESC`,
       [projectId]
     )
-    res.json({ expenses: result.rows })
+    res.json({
+      expenses: result.rows.map((r) => ({
+        id: r.id,
+        purchasedBy: r.purchased_by,
+        purchaserName: r.purchaser_name,
+        store: r.store,
+        date: r.expense_date,
+        totalAmountOre: Number(r.total_amount_ore),
+        cardLastFour: r.card_last_four,
+        status: r.status,
+        createdAt: r.created_at,
+      })),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /projects/:projectId/expenses/:expenseId ────────────────────────────
+
+projectDetailRouter.get('/expenses/:expenseId', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    const expense = await getFullExpense(expenseId, { projectId })
+    if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+
+    res.json(expense)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /projects/:projectId/expenses/from-receipt ─────────────────────────
+
+const FromReceiptSchema = z.object({
+  captureId: z.string().uuid('captureId must be a UUID'),
+})
+
+projectDetailRouter.post(
+  '/expenses/from-receipt',
+  receiptParseLimiter,
+  receiptUpload.single('receipt'),
+  async (req, res, next) => {
+    try {
+      const { projectId } = req.params as { projectId: string }
+      const userId = req.user!.userId
+      await requireProjectMember(projectId, userId)
+
+      if (!req.file) throw new AppError(400, 'NO_FILE', 'No receipt file uploaded')
+      const { captureId } = FromReceiptSchema.parse(req.body)
+
+      const householdId = await getProjectHouseholdId(projectId)
+      const intake = await intakeReceipt(householdId, `receipts/projects/${projectId}`, req.file.buffer)
+      const { expenseId, created } = await createDraftFromIntake({ projectId }, householdId, userId, captureId, intake)
+
+      const fullExpense = await getFullExpense(expenseId, { projectId })
+      res.status(created ? 201 : 200).json(fullExpense)
+    } catch (err) {
+      next(err)
+    }
+  }
+)
+
+// ─── PATCH /projects/:projectId/expenses/:expenseId ──────────────────────────
+
+projectDetailRouter.patch('/expenses/:expenseId', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+    await requireProjectDraftExpense(projectId, expenseId)
+
+    const body = UpdateExpenseSchema.parse(req.body)
+    if (body.purchasedBy !== undefined) {
+      await requirePurchaserIsProjectMember(projectId, body.purchasedBy)
+    }
+
+    const { sets, params } = buildExpenseUpdate(body)
+    params.push(expenseId)
+
+    await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── Line items on a project draft ───────────────────────────────────────────
+
+async function requireProjectDraftExpense(projectId: string, expenseId: string) {
+  const expCheck = await db.query<{ status: string }>(
+    'SELECT status FROM expenses WHERE id = $1 AND project_id = $2',
+    [expenseId, projectId]
+  )
+  const expense = expCheck.rows[0]
+  if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+  if (expense.status !== 'pending_review') {
+    throw new AppError(409, 'INVALID_STATUS', 'Line items can only be changed on a draft')
+  }
+}
+
+projectDetailRouter.post('/expenses/:expenseId/line-items', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+    await requireProjectDraftExpense(projectId, expenseId)
+
+    const body = ProjectLineItemSchema.parse(req.body)
+
+    await db.query(
+      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, is_personal, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [expenseId, body.description, body.quantity, body.unitPriceOre, body.isPersonal, body.categoryId ?? null]
+    )
+    await recomputeExpenseTotal(expenseId)
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.status(201).json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+const UpdateProjectLineItemSchema = z.object({
+  unitPriceOre: z.number().int().min(0).optional(),
+  quantity: z.number().int().min(1).optional(),
+  description: z.string().min(1).optional(),
+  isPersonal: z.boolean().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+}).refine((d) => Object.keys(d).length > 0, { message: 'At least one field must be provided' })
+
+projectDetailRouter.patch('/expenses/:expenseId/line-items/:lineItemId', async (req, res, next) => {
+  try {
+    const { projectId, expenseId, lineItemId } = req.params as { projectId: string; expenseId: string; lineItemId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+    await requireProjectDraftExpense(projectId, expenseId)
+
+    const liCheck = await db.query('SELECT id FROM line_items WHERE id = $1 AND expense_id = $2', [lineItemId, expenseId])
+    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+
+    const body = UpdateProjectLineItemSchema.parse(req.body)
+
+    const sets: string[] = []
+    const params: unknown[] = []
+    let i = 1
+    if (body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
+    if (body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
+    if (body.description !== undefined) { sets.push(`description = $${i++}`); params.push(body.description) }
+    if (body.isPersonal !== undefined) { sets.push(`is_personal = $${i++}`); params.push(body.isPersonal) }
+    if (body.categoryId !== undefined) { sets.push(`category_id = $${i++}`); params.push(body.categoryId) }
+    params.push(lineItemId)
+
+    await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
+    await recomputeExpenseTotal(expenseId)
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+projectDetailRouter.delete('/expenses/:expenseId/line-items/:lineItemId', async (req, res, next) => {
+  try {
+    const { projectId, expenseId, lineItemId } = req.params as { projectId: string; expenseId: string; lineItemId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+    await requireProjectDraftExpense(projectId, expenseId)
+
+    const liCheck = await db.query('SELECT id FROM line_items WHERE id = $1 AND expense_id = $2', [lineItemId, expenseId])
+    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+
+    await db.query('DELETE FROM line_items WHERE id = $1', [lineItemId])
+    await recomputeExpenseTotal(expenseId)
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── POST /projects/:projectId/expenses/:expenseId/confirm ───────────────────
+
+projectDetailRouter.post('/expenses/:expenseId/confirm', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    const result = await db.query<{ status: string }>(
+      'SELECT status FROM expenses WHERE id = $1 AND project_id = $2',
+      [expenseId, projectId]
+    )
+    const expense = result.rows[0]
+    if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+    if (expense.status !== 'pending_review') {
+      throw new AppError(409, 'INVALID_STATUS', 'Only pending_review expenses can be confirmed')
+    }
+
+    const lineItemCount = await db.query('SELECT 1 FROM line_items WHERE expense_id = $1 LIMIT 1', [expenseId])
+    if (lineItemCount.rows.length === 0) {
+      throw new AppError(409, 'EMPTY_EXPENSE', 'A draft needs at least one line item before it can be confirmed')
+    }
+
+    await db.query("UPDATE expenses SET status = 'confirmed', updated_at = now() WHERE id = $1", [expenseId])
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.json(updated)
   } catch (err) {
     next(err)
   }

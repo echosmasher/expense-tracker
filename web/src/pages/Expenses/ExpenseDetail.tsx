@@ -255,7 +255,7 @@ export function ExpenseDetail() {
                         lineItemId={item.id}
                         expenseId={expense.id}
                         categoryName={item.categoryName}
-                        householdId={expense.householdId}
+                        householdId={household!.id}
                         onUpdated={(liId, catId, catName) => {
                           setExpense((prev) => {
                             if (!prev) return prev
@@ -274,7 +274,7 @@ export function ExpenseDetail() {
                     <EditablePrice
                       lineItemId={item.id}
                       expenseId={expense.id}
-                      householdId={expense.householdId}
+                      householdId={household!.id}
                       unitPriceOre={item.unitPriceOre}
                       quantity={item.quantity}
                       onUpdated={(liId, newPrice, newTotal) => {

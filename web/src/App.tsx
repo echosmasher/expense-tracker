@@ -18,6 +18,7 @@ import { CreateHousehold } from './pages/Onboarding/CreateHousehold'
 import { ExpenseList } from './pages/Expenses/ExpenseList'
 import { ExpenseDetail } from './pages/Expenses/ExpenseDetail'
 import { AddExpense } from './pages/Expenses/AddExpense'
+import { ReviewDraft } from './pages/Expenses/ReviewDraft'
 
 // Settlement
 import { ActiveSettlement } from './pages/Settlement/Active'
@@ -82,7 +83,9 @@ export function App() {
             <Route path="/home" element={<ExpenseList />} />
             <Route path="/expenses" element={<ExpenseList />} />
             <Route path="/expenses/new" element={<AddExpense />} />
+            <Route path="/expenses/:expenseId/review" element={<ReviewDraft />} />
             <Route path="/expenses/:expenseId" element={<ExpenseDetail />} />
+            <Route path="/projects/:projectId/expenses/:expenseId/review" element={<ReviewDraft />} />
 
             <Route path="/settlement" element={<ActiveSettlement />} />
             <Route path="/settlement/history" element={<History />} />
