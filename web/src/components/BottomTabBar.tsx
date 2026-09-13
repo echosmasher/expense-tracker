@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { Receipt, Scale, FolderKanban, Menu, ScanLine } from 'lucide-react'
+import { Receipt, Scale, FolderKanban, Menu } from 'lucide-react'
+import { ScanTab } from '../capture/ScanTab'
 
 export function BottomTabBar() {
   return (
@@ -13,9 +14,7 @@ export function BottomTabBar() {
         <span className="tab-label">Settlement</span>
       </NavLink>
 
-      <NavLink to="/expenses/new" className="tab-scan" aria-label="Scan receipt">
-        <ScanLine size={22} strokeWidth={2} aria-hidden="true" />
-      </NavLink>
+      <ScanTab />
 
       <NavLink to="/projects" className={({ isActive }) => `tab-item ${isActive ? 'tab-item--active' : ''}`}>
         <FolderKanban className="tab-icon" size={20} strokeWidth={1.75} aria-hidden="true" />
@@ -63,20 +62,6 @@ export function BottomTabBar() {
           white-space: nowrap;
         }
 
-        .tab-scan {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 48px;
-          height: 48px;
-          flex-shrink: 0;
-          margin-top: -22px;
-          border-radius: 50%;
-          background: var(--accent);
-          color: #fff;
-          box-shadow: 0 4px 12px rgba(99,102,241,0.45);
-          text-decoration: none;
-        }
       `}</style>
     </nav>
   )
