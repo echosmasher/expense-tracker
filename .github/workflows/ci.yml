@@ -39,6 +39,13 @@ jobs:
         run: npm audit --omit=dev --workspaces
 
       # backend and web resolve @expense-tracker/shared via its built dist/
+      # Spec 005: the settlement calculator's correctness core must not move
+      # while currency support lands around it (SC-004).
+      - name: Guard shared/src/calc/settlement.ts against changes
+        run: |
+          git fetch origin master --depth=1
+          git diff --quiet origin/master -- shared/src/calc/settlement.ts
+
       - name: Build shared package
         run: npm run build --workspace=shared
 

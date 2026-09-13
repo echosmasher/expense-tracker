@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { expenses, categories } from '@expense-tracker/shared'
+import { expenses, categories, formatMinor } from '@expense-tracker/shared'
 import type { Expense, CategoryInfo } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
@@ -9,6 +9,21 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 
 function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
+}
+
+function formatRate(rateScaled: string, currency: string) {
+  // rateScaled is NOK per one unit of currency, ×10^6.
+  const rate = Number(BigInt(rateScaled)) / 1_000_000
+  return `1 ${currency} = ${rate.toFixed(4)} NOK`
+}
+
+const RATE_SOURCE_LABEL: Record<string, string> = {
+  norges_bank: 'Norges Bank',
+  cached: 'cached',
+  manual: 'manual',
+  corrected: 'corrected',
+  derived: 'derived',
+  pending: 'pending',
 }
 
 function formatDate(iso: string | null) {
@@ -232,6 +247,21 @@ export function ExpenseDetail() {
               {expense.cardLastFour && <> · •••• {expense.cardLastFour}</>}
             </p>
             <div className="detail-total">{formatNok(expense.totalAmountOre)}</div>
+            {expense.currency !== 'NOK' && (
+              <div className="detail-currency">
+                <span className="detail-currency-original">
+                  {expense.originalTotalMinor !== null && formatMinor(expense.originalTotalMinor, expense.currency)}
+                </span>
+                {expense.rateScaled && (
+                  <span className="detail-currency-rate">
+                    {formatRate(expense.rateScaled, expense.currency)}
+                    {expense.rateSource && (
+                      <span className="detail-currency-source"> · {RATE_SOURCE_LABEL[expense.rateSource] ?? expense.rateSource}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {receiptObjectUrl && (
@@ -381,6 +411,25 @@ export function ExpenseDetail() {
           font-weight: 500;
           color: var(--text-primary);
           letter-spacing: -0.02em;
+        }
+        .detail-currency {
+          display: flex;
+          flex-direction: column;
+          gap: 0.15rem;
+          margin-top: 0.35rem;
+        }
+        .detail-currency-original {
+          font-family: 'DM Mono', monospace;
+          font-size: 0.9rem;
+          color: var(--text-secondary);
+        }
+        .detail-currency-rate {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+        .detail-currency-source {
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
         }
         .detail-receipt-img {
           width: 100%;

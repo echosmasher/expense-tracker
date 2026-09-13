@@ -197,6 +197,7 @@ export interface Household {
   name: string
   address: string
   status: 'pending' | 'active'
+  homeCurrency: string
   members: Array<{ userId: string; name: string; role: 'admin' | 'member' }>
   currentAllocationKey: Array<{ userId: string; name: string; shareBp: number }>
   tags: Array<{ id: string; name: string; isPersonal: boolean }>
@@ -240,6 +241,15 @@ export interface Expense {
   status: 'pending_review' | 'confirmed' | 'settled'
   captureId: string | null
   createdAt: string
+  /** ISO 4217 currency code. 'NOK' (the household's home currency) means no
+   * conversion happened — the fields below are all null. */
+  currency: string
+  originalTotalMinor: number | null
+  /** NOK per one unit of `currency`, × 10^6, as a decimal string (BigInt-precision). */
+  rateScaled: string | null
+  rateDate: string | null
+  rateSource: 'norges_bank' | 'cached' | 'manual' | 'corrected' | 'derived' | 'pending' | null
+  rateCapturedAt: string | null
   lineItems: Array<{
     id: string
     description: string
@@ -249,6 +259,8 @@ export interface Expense {
     isPersonal: boolean
     categoryId: string | null
     categoryName: string | null
+    originalUnitPriceMinor: number | null
+    originalTotalMinor: number | null
   }>
 }
 
@@ -272,10 +284,14 @@ export const expenses = {
     date?: string | undefined
     purchasedBy: string
     cardLastFour?: string | undefined
+    /** Foreign-currency hand entry: set together with rateScaled. Omit for home currency. */
+    currency?: string | undefined
+    rateScaled?: number | undefined
     lineItems: Array<{
       description: string
       quantity: number
-      unitPriceOre: number
+      unitPriceOre?: number | undefined
+      originalUnitPriceMinor?: number | undefined
       tagId?: string | undefined
       isPersonal?: boolean | undefined
       categoryId?: string | undefined

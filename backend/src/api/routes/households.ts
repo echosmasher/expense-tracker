@@ -28,9 +28,9 @@ async function getHouseholdOrThrow(householdId: string, userId: string) {
   if (memberCheck.rows.length === 0) throw new AppError(403, 'FORBIDDEN', 'Not a member of this household')
 
   const result = await db.query<{
-    id: string; name: string; address: string; status: string; current_allocation_key_id: string | null
+    id: string; name: string; address: string; status: string; current_allocation_key_id: string | null; home_currency: string
   }>(
-    'SELECT id, name, address, status, current_allocation_key_id FROM households WHERE id = $1',
+    'SELECT id, name, address, status, current_allocation_key_id, home_currency FROM households WHERE id = $1',
     [householdId]
   )
   const household = result.rows[0]
@@ -154,14 +154,15 @@ router.post('/', async (req, res, next) => {
     })
 
     const [hhResult, details] = await Promise.all([
-      db.query<{ id: string; name: string; address: string; status: string }>(
-        'SELECT id, name, address, status FROM households WHERE id = $1',
+      db.query<{ id: string; name: string; address: string; status: string; home_currency: string }>(
+        'SELECT id, name, address, status, home_currency FROM households WHERE id = $1',
         [household.id]
       ),
       buildHouseholdResponse(household.id, household.keyId),
     ])
 
-    res.status(201).json({ ...hhResult.rows[0]!, ...details })
+    const hh = hhResult.rows[0]!
+    res.status(201).json({ id: hh.id, name: hh.name, address: hh.address, status: hh.status, homeCurrency: hh.home_currency, ...details })
   } catch (err) {
     next(err)
   }
@@ -172,9 +173,9 @@ router.get('/', async (req, res, next) => {
   try {
     const userId = req.user!.userId
     const result = await db.query<{
-      id: string; name: string; address: string; status: string; current_allocation_key_id: string | null
+      id: string; name: string; address: string; status: string; current_allocation_key_id: string | null; home_currency: string
     }>(
-      `SELECT h.id, h.name, h.address, h.status, h.current_allocation_key_id
+      `SELECT h.id, h.name, h.address, h.status, h.current_allocation_key_id, h.home_currency
        FROM households h
        JOIN household_members hm ON hm.household_id = h.id
        WHERE hm.user_id = $1
@@ -184,7 +185,7 @@ router.get('/', async (req, res, next) => {
     const households = await Promise.all(
       result.rows.map(async (h) => {
         const details = await buildHouseholdResponse(h.id, h.current_allocation_key_id)
-        return { id: h.id, name: h.name, address: h.address, status: h.status, ...details }
+        return { id: h.id, name: h.name, address: h.address, status: h.status, homeCurrency: h.home_currency, ...details }
       })
     )
     res.json(households)
@@ -202,7 +203,7 @@ router.get('/:householdId', async (req, res, next) => {
     const hh = await getHouseholdOrThrow(householdId, userId)
     const details = await buildHouseholdResponse(householdId, hh.current_allocation_key_id)
 
-    res.json({ id: hh.id, name: hh.name, address: hh.address, status: hh.status, ...details })
+    res.json({ id: hh.id, name: hh.name, address: hh.address, status: hh.status, homeCurrency: hh.home_currency, ...details })
   } catch (err) {
     next(err)
   }

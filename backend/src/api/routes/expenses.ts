@@ -9,7 +9,8 @@ import { receiptUpload } from '../receiptUpload.js'
 import { receiptParseLimiter } from '../middleware/rateLimit.js'
 import { intakeReceipt } from '../../services/receiptIntake.js'
 import { createDraftFromIntake } from '../../services/draftExpense.js'
-import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate } from '../../services/expenseView.js'
+import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate, convertForeignLine } from '../../services/expenseView.js'
+import { getCurrency } from '@expense-tracker/shared'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -46,7 +47,11 @@ async function requireDraftExpense(householdId: string, expenseId: string): Prom
 const LineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().int().positive(),
-  unitPriceOre: z.number().int('Unit price must be an integer (øre)'),
+  // Home-currency expenses set unitPriceOre; a foreign-currency expense
+  // (CreateExpenseSchema.currency !== 'NOK') sets originalUnitPriceMinor
+  // instead — the server derives unitPriceOre from it and the expense rate.
+  unitPriceOre: z.number().int('Unit price must be an integer (øre)').optional(),
+  originalUnitPriceMinor: z.number().int('originalUnitPriceMinor must be an integer').optional(),
   tagId: z.string().uuid().optional(),
   isPersonal: z.boolean().default(false),
   categoryId: z.string().uuid().optional(),
@@ -58,6 +63,12 @@ const CreateExpenseSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   purchasedBy: z.string().uuid(),
   cardLastFour: z.string().regex(/^\d{4}$/).optional(),
+  // Foreign-currency hand entry: currency + an explicit rate (the rare case
+  // of entering a receipt manually rather than through the draft flow,
+  // which resolves rates automatically). Home currency (default) needs
+  // neither.
+  currency: z.string().length(3).optional(),
+  rateScaled: z.number().int().positive().optional(),
   lineItems: z.array(LineItemSchema).min(1),
 })
 
@@ -69,9 +80,24 @@ router.post('/', async (req, res, next) => {
 
     const body = CreateExpenseSchema.parse(req.body)
 
-    // Validate all amounts are integers (should already be caught by zod, extra check)
+    const currency = (body.currency ?? 'NOK').toUpperCase()
+    const isForeign = currency !== 'NOK'
+    const currencyInfo = isForeign ? getCurrency(currency) : undefined
+    if (isForeign && !currencyInfo) {
+      throw new AppError(400, 'UNKNOWN_CURRENCY', `Unknown currency: ${currency}`)
+    }
+    if (isForeign && body.rateScaled === undefined) {
+      throw new AppError(400, 'RATE_REQUIRED', 'A foreign-currency expense requires an explicit rateScaled')
+    }
+
+    // Validate amounts are present and integers for the chosen currency
+    // (should already be caught by zod, extra check).
     for (const item of body.lineItems) {
-      if (!Number.isInteger(item.unitPriceOre)) {
+      if (isForeign) {
+        if (!Number.isInteger(item.originalUnitPriceMinor)) {
+          throw new AppError(400, 'NON_INTEGER_AMOUNT', 'originalUnitPriceMinor must be provided and an integer for a foreign-currency line item')
+        }
+      } else if (!Number.isInteger(item.unitPriceOre)) {
         throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${item.unitPriceOre})`)
       }
     }
@@ -93,9 +119,24 @@ router.post('/', async (req, res, next) => {
     )
     const keywords = keywordsResult.rows.map((r) => r.keyword)
 
+    // For a foreign-currency expense, derive each line's home-currency
+    // amounts from its original amount and the supplied rate up front, so
+    // auto-tagging and totalling below work identically to the home-currency
+    // path from here on. totalPriceOre is converted directly from the
+    // line's original total, never from unitPriceOre × quantity (see
+    // convertForeignLine).
+    const rateScaled = body.rateScaled !== undefined ? BigInt(body.rateScaled) : null
+    const linesWithHomeAmounts = body.lineItems.map((item) => {
+      if (!isForeign) {
+        return { ...item, unitPriceOre: item.unitPriceOre!, totalPriceOre: item.unitPriceOre! * item.quantity, originalTotalMinor: null as number | null }
+      }
+      const converted = convertForeignLine(item.originalUnitPriceMinor!, item.quantity, rateScaled!, currencyInfo!.exponent)
+      return { ...item, unitPriceOre: converted.unitPriceOre, totalPriceOre: converted.totalPriceOre, originalTotalMinor: converted.originalTotalMinor }
+    })
+
     // Auto-tag with personal keywords (user can override via lineItems[].isPersonal)
     const taggedItems = tagLineItems(
-      body.lineItems.map((item) => ({
+      linesWithHomeAmounts.map((item) => ({
         description: item.description,
         quantity: item.quantity,
         unitPriceOre: item.unitPriceOre,
@@ -107,21 +148,27 @@ router.post('/', async (req, res, next) => {
     // Resolve final isPersonal per line (user choice OR auto-tag) before computing the
     // household-billable total. total_amount_ore must exclude personal items — it feeds
     // settlement.householdAmountOre, and the edit/PATCH path already excludes them.
-    const resolvedLineItems = body.lineItems.map((item, i) => ({
+    const resolvedLineItems = linesWithHomeAmounts.map((item, i) => ({
       ...item,
       isPersonal: item.isPersonal || (taggedItems[i]?.isPersonal ?? false),
     }))
 
     const totalAmountOre = resolvedLineItems.reduce(
-      (sum, item) => (item.isPersonal ? sum : sum + item.unitPriceOre * item.quantity),
+      (sum, item) => (item.isPersonal ? sum : sum + item.totalPriceOre),
       0
     )
+
+    const originalTotalMinor = isForeign
+      ? resolvedLineItems.reduce((sum, item) => sum + item.originalTotalMinor!, 0)
+      : null
 
     const expense = await db.transaction(async (client) => {
       const expResult = await client.query<{ id: string }>(
         `INSERT INTO expenses
-           (household_id, purchased_by, receipt_image_key, store, expense_date, total_amount_ore, card_last_four, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review')
+           (household_id, purchased_by, receipt_image_key, store, expense_date, total_amount_ore, card_last_four, status,
+            currency, original_total_minor, rate_scaled, rate_date, rate_source, rate_captured_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review',
+                 $8, $9, $10, $11, $12, $13)
          RETURNING id`,
         [
           householdId,
@@ -131,6 +178,12 @@ router.post('/', async (req, res, next) => {
           body.date ?? null,
           totalAmountOre,
           body.cardLastFour ?? null,
+          currency,
+          originalTotalMinor,
+          rateScaled !== null ? rateScaled.toString() : null,
+          null, // rate_date: no Norges Bank published date backs a hand-entered manual rate
+          isForeign ? 'manual' : null,
+          isForeign ? new Date() : null,
         ]
       )
       const expenseId = expResult.rows[0]!.id
@@ -138,17 +191,20 @@ router.post('/', async (req, res, next) => {
       for (const item of resolvedLineItems) {
         await client.query(
           `INSERT INTO line_items
-             (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id,
+              original_unit_price_minor, original_total_minor)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             expenseId,
             item.description,
             item.quantity,
             item.unitPriceOre,
-            item.unitPriceOre * item.quantity,
+            item.totalPriceOre,
             item.tagId ?? null,
             item.isPersonal,
             item.categoryId ?? null,
+            isForeign ? item.originalUnitPriceMinor : null,
+            item.originalTotalMinor,
           ]
         )
       }
@@ -474,6 +530,11 @@ router.post('/:expenseId/line-items', async (req, res, next) => {
     await requireDraftExpense(householdId, expenseId)
 
     const body = LineItemSchema.parse(req.body)
+    // Foreign-currency drafts gain a currency-aware add-line-item path in a
+    // later ticket; for now this route is home-currency only.
+    if (!Number.isInteger(body.unitPriceOre)) {
+      throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${body.unitPriceOre})`)
+    }
 
     await db.query(
       `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id)
@@ -483,7 +544,7 @@ router.post('/:expenseId/line-items', async (req, res, next) => {
         body.description,
         body.quantity,
         body.unitPriceOre,
-        body.unitPriceOre * body.quantity,
+        body.unitPriceOre! * body.quantity,
         body.tagId ?? null,
         body.isPersonal,
         body.categoryId ?? null,

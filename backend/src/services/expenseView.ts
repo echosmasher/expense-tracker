@@ -6,6 +6,7 @@
  */
 import { z } from 'zod'
 import { db } from '../db/client.js'
+import { homeOre } from '@expense-tracker/shared'
 
 export type ExpenseScope = { householdId: string } | { projectId: string }
 
@@ -47,6 +48,12 @@ interface ExpenseRow {
   status: string
   capture_id: string | null
   created_at: Date
+  currency: string
+  original_total_minor: string | null
+  rate_scaled: string | null
+  rate_date: string | null
+  rate_source: string | null
+  rate_captured_at: Date | null
 }
 
 interface LineItemRow {
@@ -58,6 +65,8 @@ interface LineItemRow {
   is_personal: boolean
   category_id: string | null
   category_name: string | null
+  original_unit_price_minor: string | null
+  original_total_minor: string | null
 }
 
 export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
@@ -75,7 +84,7 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
 
   const itemsResult = await db.query<LineItemRow>(
     `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
-            li.category_id, c.name as category_name
+            li.category_id, c.name as category_name, li.original_unit_price_minor, li.original_total_minor
      FROM line_items li
      LEFT JOIN categories c ON c.id = li.category_id
      WHERE li.expense_id = $1 ORDER BY li.id`,
@@ -103,6 +112,12 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
     status: expense.status,
     captureId: expense.capture_id,
     createdAt: expense.created_at,
+    currency: expense.currency,
+    originalTotalMinor: expense.original_total_minor === null ? null : Number(expense.original_total_minor),
+    rateScaled: expense.rate_scaled === null ? null : expense.rate_scaled,
+    rateDate: expense.rate_date,
+    rateSource: expense.rate_source,
+    rateCapturedAt: expense.rate_captured_at,
     lineItems: itemsResult.rows.map((li) => ({
       id: li.id,
       description: li.description,
@@ -112,7 +127,33 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
       isPersonal: li.is_personal,
       categoryId: li.category_id,
       categoryName: li.category_name,
+      originalUnitPriceMinor: li.original_unit_price_minor === null ? null : Number(li.original_unit_price_minor),
+      originalTotalMinor: li.original_total_minor === null ? null : Number(li.original_total_minor),
     })),
+  }
+}
+
+/**
+ * Convert one foreign-currency line item to its home-currency amounts.
+ *
+ * `totalPriceOre` is converted directly from the line's original TOTAL
+ * (unit × quantity), per the money model — never derived by multiplying a
+ * rounded per-unit conversion by quantity, which can drift from the
+ * direct conversion once quantity > 1. `unitPriceOre` is a separate,
+ * display-only conversion of the original unit price and must never be used
+ * to derive the stored total.
+ */
+export function convertForeignLine(
+  originalUnitPriceMinor: number,
+  quantity: number,
+  rateScaled: bigint,
+  exponent: number
+): { unitPriceOre: number; totalPriceOre: number; originalTotalMinor: number } {
+  const originalTotalMinor = originalUnitPriceMinor * quantity
+  return {
+    unitPriceOre: homeOre(originalUnitPriceMinor, rateScaled, exponent),
+    totalPriceOre: homeOre(originalTotalMinor, rateScaled, exponent),
+    originalTotalMinor,
   }
 }
 
