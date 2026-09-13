@@ -79,3 +79,9 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
    URL that outlives the session that fetched it. Every image response carries
    `Cache-Control: private, no-store` so a shared cache or proxy cannot serve one user's
    image to another.
+7. **There is no LAN perimeter to rely on.** The deployment is reachable from anywhere via a
+   Cloudflare Tunnel (spec 004, ticket 11; see `THREAT-MODEL.md` boundary 1) — being on the
+   home network is no longer a precondition for reaching any route. Every invariant above must
+   hold against an internet-wide caller, not just a trusted-network one, and rule 5 (no public
+   registration route) is what actually keeps a stranger who reaches the public hostname from
+   creating an account, not network placement.
