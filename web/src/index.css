@@ -6,6 +6,10 @@
 
 :root,
 [data-theme="dark"] {
+  /* Without this, Safari renders native form widgets (number/date inputs,
+     autofill, scrollbars) in its own light scheme regardless of our CSS,
+     which is why a themed <input> can still show up as a white box. */
+  color-scheme: dark;
   --bg-base: #09090b;
   --bg-card: #18181b;
   --bg-card-hover: #1f1f22;
@@ -38,6 +42,7 @@
 }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg-base: #f8f8fa;
   --bg-card: #ffffff;
   --bg-card-hover: #f4f4f5;
