@@ -43,6 +43,7 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 | — replay of the same `captureId` | returns the existing draft (200), creates nothing else ✓test | | | | |
 | `PATCH /households/:id/expenses/:id`, line-item add/delete | ✗ ✓test | ✗ | ✗ | ✓ household-scoped; draft (`pending_review`) only, else 409 `INVALID_STATUS` ✓test | ✓ |
 | `PATCH .../line-items/:id` (price, qty, description, personal flag, category) | not status-gated — also used to correct an already-confirmed expense | | | | |
+| `PATCH /households/:id/expenses/:id/rate` (correct a foreign expense's rate) | ✗ ✓test | ✗ | ✗ | ✓ household-scoped ✓test; foreign currency only (400 `NOT_FOREIGN_CURRENCY`); refused once settled (409 `EXPENSE_SETTLED`) or in an open settlement (409 `IN_OPEN_SETTLEMENT`, names the settlement) ✓test | ✓ |
 | Settlements: list, read | ✗ | ✗ | ✗ | ✓ scoped ✓test | ✓ |
 | Settlements: trigger (`POST`) | ✗ | ✗ | ✗ | ✗ ✓test | ✓, max one open per household |
 | Mark settlement transaction paid | ✗ | ✗ | only the debtor, the creditor, or the household admin; only while settlement is open ✓test | | |
@@ -52,6 +53,7 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 | `POST /projects/:id/expenses/from-receipt` | ✗ | ✗ project member only ✓test, rate-limited | | | |
 | — replay of the same `captureId` | returns the existing draft (200), creates nothing else | | | | |
 | `PATCH /projects/:id/expenses/:id`, line-item add/edit/delete, confirm | ✗ | ✗ project member only ✓test; draft (`pending_review`) only, else 409 `INVALID_STATUS` | | | |
+| `PATCH /projects/:id/expenses/:id/rate` (correct a foreign expense's rate) | ✗ | ✗ project member only ✓test; foreign currency only (400 `NOT_FOREIGN_CURRENCY`); refused once settled (409 `EXPENSE_SETTLED`) or in an open settlement (409 `IN_OPEN_SETTLEMENT`) | | | |
 | — confirm on a zero-line-item project draft | rejected: 409 `EMPTY_EXPENSE` | | | | |
 | Projects: finish (trigger settlement) | ✗ | ✗ | project **admin** only ✓test | | |
 | Statistics (overview, drill-down, CSV export) | ✗ | ✗ | ✗ | ✓ scoped ✓test | ✓ |

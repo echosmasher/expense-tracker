@@ -18,6 +18,8 @@ import {
   changeExpenseCurrency,
   getExpenseCurrencyContext,
   computeForeignLineAmounts,
+  correctExpenseRate,
+  CorrectRateSchema,
 } from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
 
@@ -445,10 +447,10 @@ lineItemRouter.patch('/', async (req, res, next) => {
 
     // Return updated line item
     const updated = await db.query<{
-      id: string; description: string; quantity: number; unit_price_ore: number;
+      id: string; description: string; quantity: number; unit_price_ore: number; total_price_ore: number;
       tag_id: string | null; is_personal: boolean; category_id: string | null; category_name: string | null
     }>(
-      `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
+      `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.total_price_ore, li.tag_id, li.is_personal,
               li.category_id, c.name as category_name
        FROM line_items li LEFT JOIN categories c ON c.id = li.category_id
        WHERE li.id = $1`,
@@ -460,6 +462,7 @@ lineItemRouter.patch('/', async (req, res, next) => {
       description: li.description,
       quantity: li.quantity,
       unitPriceOre: li.unit_price_ore,
+      totalPriceOre: li.total_price_ore,
       tagId: li.tag_id,
       isPersonal: li.is_personal,
       categoryId: li.category_id,
@@ -558,6 +561,27 @@ router.patch('/:expenseId', async (req, res, next) => {
       params.push(expenseId)
       await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
     }
+
+    const updated = await getFullExpense(expenseId, { householdId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── PATCH /households/:householdId/expenses/:expenseId/rate ─────────────────
+// Correct a foreign-currency expense's rate (spec 005, ticket 15): a new
+// rate directly, or the actual home-currency amount charged (rate derived).
+// Any active member may correct — not gated to a draft or to the admin.
+
+router.patch('/:expenseId/rate', async (req, res, next) => {
+  try {
+    const { householdId, expenseId } = req.params as { householdId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+
+    const body = CorrectRateSchema.parse(req.body)
+    await correctExpenseRate(expenseId, { householdId }, body)
 
     const updated = await getFullExpense(expenseId, { householdId })
     res.json(updated)

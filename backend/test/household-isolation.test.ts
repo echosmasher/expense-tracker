@@ -132,6 +132,8 @@ let draftA: string // pending_review household expense, one line item
 let draftLineItemA: string
 let projectB: string // Bob's own project, used for ID-stuffing tests
 let projectDraftA: string // pending_review project expense, one line item (via from-receipt)
+let foreignExpenseA: string // confirmed foreign-currency household expense, for rate-correction isolation tests
+let foreignProjectExpenseA: string // confirmed foreign-currency project expense (inserted directly; manual project entry is home-currency only)
 
 beforeAll(async () => {
   // Start from an empty test database.
@@ -233,6 +235,46 @@ beforeAll(async () => {
   expect(projectDraftRes.status).toBe(201)
   expect(projectDraftRes.body.status).toBe('pending_review')
   projectDraftA = projectDraftRes.body.id
+
+  // A confirmed foreign-currency household expense, for the rate-correction
+  // isolation tests (PATCH .../expenses/:id/rate).
+  const foreignRes = await request(app)
+    .post(`/api/v1/households/${householdA}/expenses`)
+    .set('Authorization', `Bearer ${alice.token}`)
+    .send({
+      store: 'Café de Paris',
+      date: '2026-06-05',
+      purchasedBy: alice.id,
+      currency: 'EUR',
+      rateScaled: 11_654_300,
+      lineItems: [{ description: 'Lunch', quantity: 1, originalUnitPriceMinor: 1250 }],
+    })
+  expect(foreignRes.status).toBe(201)
+  foreignExpenseA = foreignRes.body.id
+  const confirmForeignRes = await request(app)
+    .post(`/api/v1/households/${householdA}/expenses/${foreignExpenseA}/confirm`)
+    .set('Authorization', `Bearer ${alice.token}`)
+  expect(confirmForeignRes.status).toBe(200)
+
+  // A confirmed foreign-currency project expense. Manual project-expense
+  // entry is home-currency only (ticket 13), so this is seeded directly.
+  const foreignProjectExpense = await db.query<{ id: string }>(
+    `INSERT INTO expenses
+       (project_id, purchased_by, store, expense_date, total_amount_ore, status,
+        currency, original_total_minor, rate_scaled, rate_date, rate_source, rate_captured_at)
+     VALUES ($1, $2, 'Foreign project store', '2026-06-05', 14568, 'confirmed',
+             'EUR', 1250, 11654300, NULL, 'manual', now())
+     RETURNING id`,
+    [projectA, alice.id]
+  )
+  foreignProjectExpenseA = foreignProjectExpense.rows[0]!.id
+  await db.query(
+    `INSERT INTO line_items
+       (expense_id, description, quantity, unit_price_ore, total_price_ore,
+        original_unit_price_minor, original_total_minor)
+     VALUES ($1, 'Lumber', 1, 14568, 14568, 1250, 1250)`,
+    [foreignProjectExpenseA]
+  )
 })
 
 afterAll(async () => {
@@ -249,8 +291,9 @@ describe('sanity: household A members can access household A', () => {
       .get(`/api/v1/households/${householdA}/expenses`)
       .set('Authorization', `Bearer ${anna.token}`)
     expect(res.status).toBe(200)
-    // expenseA (confirmed) + draftA (pending_review, added by the draft-editing fixture).
-    expect(res.body.expenses).toHaveLength(2)
+    // expenseA (confirmed) + draftA (pending_review, added by the draft-editing
+    // fixture) + foreignExpenseA (confirmed, added by the rate-correction isolation fixture).
+    expect(res.body.expenses).toHaveLength(3)
     expect(res.body.expenses.map((e: { id: string }) => e.id)).toContain(expenseA)
   })
 
@@ -389,6 +432,31 @@ describe('household isolation: expenses', () => {
     expect(res.status).toBe(403)
   })
 
+  it('cannot correct the rate of another household’s foreign expense', async () => {
+    const res = await asBob(
+      request(app)
+        .patch(`/api/v1/households/${householdA}/expenses/${foreignExpenseA}/rate`)
+        .send({ rateScaled: 10_000_000 })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot correct a foreign expense’s rate through own household URL (ID stuffing)', async () => {
+    const res = await asBob(
+      request(app)
+        .patch(`/api/v1/households/${householdB}/expenses/${foreignExpenseA}/rate`)
+        .send({ rateScaled: 10_000_000 })
+    )
+    expect(res.status).toBe(404)
+
+    // And the rate really is untouched.
+    const check = await db.query<{ rate_scaled: string }>(
+      'SELECT rate_scaled FROM expenses WHERE id = $1',
+      [foreignExpenseA]
+    )
+    expect(check.rows[0]?.rate_scaled).toBe('11654300')
+  })
+
   it('cannot attribute an expense to a user from another household', async () => {
     const res = await asBob(
       request(app)
@@ -512,6 +580,24 @@ describe('household isolation: projects', () => {
   it('cannot finish another household’s project', async () => {
     const res = await asBob(request(app).post(`/api/v1/projects/${projectA}/finish`))
     expect(res.status).toBe(403)
+  })
+
+  it('cannot correct the rate of another project’s foreign expense', async () => {
+    const res = await asBob(
+      request(app)
+        .patch(`/api/v1/projects/${projectA}/expenses/${foreignProjectExpenseA}/rate`)
+        .send({ rateScaled: 10_000_000 })
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot correct a project’s foreign expense rate through own project URL (ID stuffing)', async () => {
+    const res = await asBob(
+      request(app)
+        .patch(`/api/v1/projects/${projectB}/expenses/${foreignProjectExpenseA}/rate`)
+        .send({ rateScaled: 10_000_000 })
+    )
+    expect(res.status).toBe(404)
   })
 
   it('cannot attribute a project expense to a non-member of the project', async () => {

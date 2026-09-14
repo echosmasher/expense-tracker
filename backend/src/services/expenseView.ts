@@ -6,7 +6,7 @@
  */
 import { z } from 'zod'
 import { db } from '../db/client.js'
-import { homeOre, getCurrency } from '@expense-tracker/shared'
+import { homeOre, deriveRate, distributeResidual, getCurrency } from '@expense-tracker/shared'
 import { AppError } from '../api/middleware/error.js'
 import { resolveRate } from './exchangeRates.js'
 
@@ -69,12 +69,27 @@ interface LineItemRow {
   description: string
   quantity: number
   unit_price_ore: number
+  total_price_ore: number
   tag_id: string | null
   is_personal: boolean
   category_id: string | null
   category_name: string | null
   original_unit_price_minor: string | null
   original_total_minor: string | null
+}
+
+/** The open settlement (if any) an expense is currently snapshotted into —
+ * shared by getFullExpense (so the client can withhold "Correct rate" rather
+ * than let the member hit 409 IN_OPEN_SETTLEMENT) and correctExpenseRate's
+ * own enforcement of the same rule. */
+async function findOpenSettlementId(expenseId: string): Promise<string | null> {
+  const result = await db.query<{ id: string }>(
+    `SELECT s.id FROM settlement_expenses se
+     JOIN settlements s ON s.id = se.settlement_id
+     WHERE se.expense_id = $1 AND s.status = 'open'`,
+    [expenseId]
+  )
+  return result.rows[0]?.id ?? null
 }
 
 export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
@@ -90,14 +105,17 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
   const expense = expResult.rows[0]
   if (!expense) return null
 
-  const itemsResult = await db.query<LineItemRow>(
-    `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.tag_id, li.is_personal,
-            li.category_id, c.name as category_name, li.original_unit_price_minor, li.original_total_minor
-     FROM line_items li
-     LEFT JOIN categories c ON c.id = li.category_id
-     WHERE li.expense_id = $1 ORDER BY li.id`,
-    [expenseId]
-  )
+  const [itemsResult, openSettlementId] = await Promise.all([
+    db.query<LineItemRow>(
+      `SELECT li.id, li.description, li.quantity, li.unit_price_ore, li.total_price_ore, li.tag_id, li.is_personal,
+              li.category_id, c.name as category_name, li.original_unit_price_minor, li.original_total_minor
+       FROM line_items li
+       LEFT JOIN categories c ON c.id = li.category_id
+       WHERE li.expense_id = $1 ORDER BY li.id`,
+      [expenseId]
+    ),
+    findOpenSettlementId(expenseId),
+  ])
 
   const receiptImageUrl = expense.receipt_image_key
     ? 'householdId' in scope
@@ -126,11 +144,18 @@ export async function getFullExpense(expenseId: string, scope: ExpenseScope) {
     rateDate: expense.rate_date,
     rateSource: expense.rate_source,
     rateCapturedAt: expense.rate_captured_at,
+    // Lets the client withhold "Correct rate" (spec 005 US2 scenario 5)
+    // instead of offering an action that would 409 IN_OPEN_SETTLEMENT.
+    openSettlementId,
     lineItems: itemsResult.rows.map((li) => ({
       id: li.id,
       description: li.description,
       quantity: li.quantity,
       unitPriceOre: li.unit_price_ore,
+      // Authoritative per-line home total (plan.md "Per-line rule") — never
+      // assume unitPriceOre × quantity: multi-unit rounding and a derived-
+      // rate correction's residual can both make it diverge.
+      totalPriceOre: li.total_price_ore,
       tagId: li.tag_id,
       isPersonal: li.is_personal,
       categoryId: li.category_id,
@@ -314,6 +339,134 @@ export async function changeExpenseCurrency(
 
   // Recomputes total_amount_ore and, since `currency` was just set above,
   // also refreshes original_total_minor from the reconverted line items.
+  await recomputeExpenseTotal(expenseId)
+}
+
+// ─── Rate correction (spec 005, ticket 15) ────────────────────────────────
+
+/** PATCH .../expenses/:expenseId/rate body — exactly one of a new rate or
+ * the actual home-currency amount charged. */
+export const CorrectRateSchema = z.object({
+  rateScaled: z.number().int().positive().optional(),
+  actualHomeTotalOre: z.number().int().positive().optional(),
+}).refine((d) => (d.rateScaled !== undefined) !== (d.actualHomeTotalOre !== undefined), {
+  message: 'Provide exactly one of rateScaled or actualHomeTotalOre',
+})
+
+export type CorrectRateInput = z.infer<typeof CorrectRateSchema>
+
+/**
+ * Correct a foreign-currency expense's rate (spec 005 User Story 2): either a
+ * direct new rate (`rate_source = 'corrected'`) or the actual home-currency
+ * amount charged, from which the rate is derived (`rate_source = 'derived'`)
+ * and the rounding residual assigned to the largest non-personal line — see
+ * plan.md "Derived rate from the actual charged amount". Every line is
+ * reconverted from its untouched original amount; refuses a settled expense
+ * or one in an open settlement.
+ */
+export async function correctExpenseRate(
+  expenseId: string,
+  scope: ExpenseScope,
+  input: CorrectRateInput
+): Promise<void> {
+  const scopeColumn = 'householdId' in scope ? 'household_id' : 'project_id'
+  const scopeId = 'householdId' in scope ? scope.householdId : scope.projectId
+
+  const expResult = await db.query<{
+    currency: string
+    status: string
+    original_total_minor: string | null
+  }>(
+    `SELECT currency, status, original_total_minor FROM expenses WHERE id = $1 AND ${scopeColumn} = $2`,
+    [expenseId, scopeId]
+  )
+  const expense = expResult.rows[0]
+  if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+  if (expense.currency === 'NOK') {
+    throw new AppError(400, 'NOT_FOREIGN_CURRENCY', 'This expense is in the home currency — there is no rate to correct')
+  }
+  if (expense.status === 'settled') {
+    throw new AppError(409, 'EXPENSE_SETTLED', 'A settled expense is immutable')
+  }
+
+  // A settlement snapshot's figures must never drift from the expenses it
+  // was built from (spec 003), so a correction is refused while the expense
+  // sits in a still-open settlement — naming it so the member knows which
+  // settlement to complete or wait out first.
+  const openSettlementId = await findOpenSettlementId(expenseId)
+  if (openSettlementId) {
+    throw new AppError(
+      409,
+      'IN_OPEN_SETTLEMENT',
+      `Cannot correct rate: this expense is included in open settlement ${openSettlementId}`
+    )
+  }
+
+  const exponent = getCurrency(expense.currency)?.exponent ?? 2
+
+  const lineItemsResult = await db.query<{
+    id: string
+    quantity: number
+    original_unit_price_minor: string | null
+    is_personal: boolean
+  }>(
+    'SELECT id, quantity, original_unit_price_minor, is_personal FROM line_items WHERE expense_id = $1',
+    [expenseId]
+  )
+
+  interface ConvertedLine {
+    id: string
+    unitPriceOre: number
+    totalPriceOre: number
+    isPersonal: boolean
+  }
+
+  const convertLine = (originalUnitPriceMinor: string | null, quantity: number, rateScaled: bigint) => {
+    const minor = originalUnitPriceMinor !== null ? Number(originalUnitPriceMinor) : 0
+    return convertForeignLine(minor, quantity, rateScaled, exponent)
+  }
+
+  let rateScaled: bigint
+  let rateSource: 'corrected' | 'derived'
+  let converted: ConvertedLine[]
+
+  if (input.rateScaled !== undefined) {
+    rateScaled = BigInt(input.rateScaled)
+    rateSource = 'corrected'
+    converted = lineItemsResult.rows.map((li) => {
+      const c = convertLine(li.original_unit_price_minor, li.quantity, rateScaled)
+      return { id: li.id, unitPriceOre: c.unitPriceOre, totalPriceOre: c.totalPriceOre, isPersonal: li.is_personal }
+    })
+  } else {
+    const originalTotalMinor = expense.original_total_minor !== null ? Number(expense.original_total_minor) : 0
+    rateScaled = deriveRate(input.actualHomeTotalOre!, originalTotalMinor, exponent)
+    rateSource = 'derived'
+    const preResidual: ConvertedLine[] = lineItemsResult.rows.map((li) => {
+      const c = convertLine(li.original_unit_price_minor, li.quantity, rateScaled)
+      return { id: li.id, unitPriceOre: c.unitPriceOre, totalPriceOre: c.totalPriceOre, isPersonal: li.is_personal }
+    })
+    const sumBeforeResidual = preResidual.reduce((sum, l) => sum + l.totalPriceOre, 0)
+    const residualOre = input.actualHomeTotalOre! - sumBeforeResidual
+    converted = distributeResidual(preResidual, residualOre)
+  }
+
+  await db.transaction(async (client) => {
+    for (const li of converted) {
+      await client.query(
+        'UPDATE line_items SET unit_price_ore = $1, total_price_ore = $2 WHERE id = $3',
+        [li.unitPriceOre, li.totalPriceOre, li.id]
+      )
+    }
+    // rate_date names the published rate date that backed a fetched rate — a
+    // correction is member-entered, not date-backed, same as 'manual'.
+    await client.query(
+      `UPDATE expenses
+       SET rate_scaled = $1, rate_source = $2, rate_captured_at = now(), rate_date = NULL, updated_at = now()
+       WHERE id = $3`,
+      [rateScaled.toString(), rateSource, expenseId]
+    )
+  })
+
   await recomputeExpenseTotal(expenseId)
 }
 

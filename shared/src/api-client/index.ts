@@ -250,11 +250,18 @@ export interface Expense {
   rateDate: string | null
   rateSource: 'norges_bank' | 'cached' | 'manual' | 'corrected' | 'derived' | 'pending' | null
   rateCapturedAt: string | null
+  /** Set when this expense is snapshotted into a still-open settlement — a
+   * rate correction would 409 IN_OPEN_SETTLEMENT until it closes. */
+  openSettlementId: string | null
   lineItems: Array<{
     id: string
     description: string
     quantity: number
     unitPriceOre: number
+    /** Authoritative per-line home total — never assume unitPriceOre ×
+     * quantity for a foreign-currency line; rounding and a derived-rate
+     * correction's residual can both make it diverge. */
+    totalPriceOre: number
     tagId: string | null
     isPersonal: boolean
     categoryId: string | null
@@ -339,6 +346,15 @@ export const expenses = {
   deleteLineItem: (householdId: string, expenseId: string, lineItemId: string) =>
     request<Expense>(`/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}`, {
       method: 'DELETE',
+    }),
+
+  /** Correct a foreign-currency expense's rate (spec 005, ticket 15): a new
+   * rate directly, or the actual home-currency amount charged, from which
+   * the rate is derived. Exactly one of the two must be supplied. */
+  correctRate: (householdId: string, expenseId: string, body: { rateScaled: number } | { actualHomeTotalOre: number }) =>
+    request<Expense>(`/households/${householdId}/expenses/${expenseId}/rate`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     }),
 }
 
@@ -460,6 +476,12 @@ export const projects = {
   deleteLineItem: (projectId: string, expenseId: string, lineItemId: string) =>
     request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items/${lineItemId}`, {
       method: 'DELETE',
+    }),
+
+  correctExpenseRate: (projectId: string, expenseId: string, body: { rateScaled: number } | { actualHomeTotalOre: number }) =>
+    request<Expense>(`/projects/${projectId}/expenses/${expenseId}/rate`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
     }),
 }
 

@@ -36,6 +36,7 @@ function EditablePrice({
   expenseId,
   householdId,
   unitPriceOre,
+  totalPriceOre,
   quantity,
   onUpdated,
 }: {
@@ -43,8 +44,9 @@ function EditablePrice({
   expenseId: string
   householdId: string
   unitPriceOre: number
+  totalPriceOre: number
   quantity: number
-  onUpdated: (lineItemId: string, unitPriceOre: number, newTotalAmountOre: number) => void
+  onUpdated: (lineItemId: string, unitPriceOre: number, totalPriceOre: number, newTotalAmountOre: number) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
@@ -62,7 +64,7 @@ function EditablePrice({
     setSaving(true)
     try {
       const result = await expenses.updateLineItem(householdId, expenseId, lineItemId, { unitPriceOre: parsed })
-      onUpdated(lineItemId, result.unitPriceOre, result.newTotalAmountOre)
+      onUpdated(lineItemId, result.unitPriceOre, result.totalPriceOre, result.newTotalAmountOre)
       setEditing(false)
     } catch { /* ignore */ }
     finally { setSaving(false) }
@@ -90,8 +92,147 @@ function EditablePrice({
 
   return (
     <button type="button" className="line-item-price line-item-price--editable" onClick={startEdit}>
-      {formatNok(unitPriceOre * quantity)}
+      {formatNok(totalPriceOre)}
     </button>
+  )
+}
+
+function CorrectRateSheet({
+  expense,
+  householdId,
+  onClose,
+  onCorrected,
+}: {
+  expense: Expense
+  householdId: string
+  onClose: () => void
+  onCorrected: (updated: Expense) => void
+}) {
+  const [mode, setMode] = useState<'rate' | 'actual'>('rate')
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    setError(null)
+    const parsed = parseFloat(value.replace(',', '.'))
+    if (isNaN(parsed) || parsed <= 0) {
+      setError('Enter a positive number.')
+      return
+    }
+    setSaving(true)
+    try {
+      const body = mode === 'rate'
+        ? { rateScaled: Math.round(parsed * 1_000_000) }
+        : { actualHomeTotalOre: Math.round(parsed * 100) }
+      const updated = await expenses.correctRate(householdId, expense.id, body)
+      onCorrected(updated)
+      onClose()
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to correct the rate.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rate-sheet-backdrop" onClick={onClose}>
+      <div className="rate-sheet" onClick={(e) => e.stopPropagation()}>
+        <h2 className="rate-sheet-title">Correct rate</h2>
+        <div className="rate-sheet-tabs">
+          <button
+            type="button"
+            className={`rate-sheet-tab ${mode === 'rate' ? 'rate-sheet-tab--active' : ''}`}
+            onClick={() => { setMode('rate'); setValue('') }}
+          >
+            New rate
+          </button>
+          <button
+            type="button"
+            className={`rate-sheet-tab ${mode === 'actual' ? 'rate-sheet-tab--active' : ''}`}
+            onClick={() => { setMode('actual'); setValue('') }}
+          >
+            Actual amount charged
+          </button>
+        </div>
+        {mode === 'rate' ? (
+          <label className="rate-sheet-field">
+            <span>1 {expense.currency} =</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="11.6543"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+            />
+            <span>NOK</span>
+          </label>
+        ) : (
+          <label className="rate-sheet-field">
+            <span>kr</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="145,68"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+            />
+            <span>charged in total</span>
+          </label>
+        )}
+        {error && <p className="rate-sheet-error">{error}</p>}
+        <div className="rate-sheet-actions">
+          <button type="button" className="rate-sheet-cancel" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="button" className="rate-sheet-save" onClick={handleSubmit} disabled={saving}>
+            {saving ? 'Saving…' : 'Save correction'}
+          </button>
+        </div>
+      </div>
+      <style>{`
+        .rate-sheet-backdrop {
+          position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+          display: flex; align-items: flex-end; justify-content: center;
+          z-index: 100;
+        }
+        .rate-sheet {
+          width: 100%; max-width: 480px;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-bottom: none;
+          border-radius: 16px 16px 0 0;
+          padding: 1.25rem;
+        }
+        .rate-sheet-title { margin: 0 0 1rem; font-size: 1.1rem; font-weight: 600; }
+        .rate-sheet-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .rate-sheet-tab {
+          flex: 1; padding: 0.5rem; border-radius: 8px;
+          border: 1px solid var(--border-input); background: var(--badge-bg);
+          color: var(--text-secondary); font-size: 0.8rem; font-family: inherit; cursor: pointer;
+        }
+        .rate-sheet-tab--active { border-color: var(--accent); color: var(--text-primary); }
+        .rate-sheet-field {
+          display: flex; align-items: center; gap: 0.5rem;
+          font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;
+        }
+        .rate-sheet-field input {
+          flex: 1; background: var(--bg-base); border: 1px solid var(--border-input);
+          border-radius: 8px; color: var(--text-primary); font-family: 'DM Mono', monospace;
+          font-size: 0.9rem; padding: 0.5rem 0.6rem; outline: none;
+        }
+        .rate-sheet-field input:focus { border-color: var(--accent); }
+        .rate-sheet-error { color: var(--danger); font-size: 0.8rem; margin: 0 0 0.75rem; }
+        .rate-sheet-actions { display: flex; gap: 0.5rem; }
+        .rate-sheet-cancel, .rate-sheet-save {
+          flex: 1; border-radius: 10px; padding: 0.6rem; font-size: 0.875rem;
+          font-family: inherit; cursor: pointer; border: none;
+        }
+        .rate-sheet-cancel { background: var(--badge-bg); color: var(--text-secondary); }
+        .rate-sheet-save { background: var(--accent); color: #fff; }
+        .rate-sheet-save:disabled, .rate-sheet-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+      `}</style>
+    </div>
   )
 }
 
@@ -190,6 +331,7 @@ export function ExpenseDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [correctingRate, setCorrectingRate] = useState(false)
   const receiptObjectUrl = useAuthenticatedImage(expense?.receiptImageUrl)
   const isOnline = useOnlineStatus()
 
@@ -221,13 +363,20 @@ export function ExpenseDetail() {
     }
   }
 
+  // The authoritative per-line home total — never unitPriceOre × quantity,
+  // which a derived-rate correction's residual can make diverge from.
   const householdTotal = expense?.lineItems
     .filter((li) => !li.isPersonal)
-    .reduce((sum, li) => sum + li.unitPriceOre * li.quantity, 0) ?? 0
+    .reduce((sum, li) => sum + li.totalPriceOre, 0) ?? 0
 
   const personalTotal = expense?.lineItems
     .filter((li) => li.isPersonal)
-    .reduce((sum, li) => sum + li.unitPriceOre * li.quantity, 0) ?? 0
+    .reduce((sum, li) => sum + li.totalPriceOre, 0) ?? 0
+
+  const canCorrectRate = !!expense
+    && expense.currency !== 'NOK'
+    && expense.status !== 'settled'
+    && !expense.openSettlementId
 
   return (
     <div className="detail-page">
@@ -256,9 +405,22 @@ export function ExpenseDetail() {
                   <span className="detail-currency-rate">
                     {formatRate(expense.rateScaled, expense.currency)}
                     {expense.rateSource && (
-                      <span className="detail-currency-source"> · {RATE_SOURCE_LABEL[expense.rateSource] ?? expense.rateSource}</span>
+                      <span
+                        className={
+                          expense.rateSource === 'corrected' || expense.rateSource === 'derived'
+                            ? 'detail-currency-source detail-currency-source--corrected'
+                            : 'detail-currency-source'
+                        }
+                      >
+                        {' '}· {RATE_SOURCE_LABEL[expense.rateSource] ?? expense.rateSource}
+                      </span>
                     )}
                   </span>
+                )}
+                {canCorrectRate && (
+                  <button type="button" className="detail-correct-rate-btn" onClick={() => setCorrectingRate(true)}>
+                    Correct rate
+                  </button>
                 )}
               </div>
             )}
@@ -306,15 +468,16 @@ export function ExpenseDetail() {
                       expenseId={expense.id}
                       householdId={household!.id}
                       unitPriceOre={item.unitPriceOre}
+                      totalPriceOre={item.totalPriceOre}
                       quantity={item.quantity}
-                      onUpdated={(liId, newPrice, newTotal) => {
+                      onUpdated={(liId, newPrice, newTotalPrice, newTotal) => {
                         setExpense((prev) => {
                           if (!prev) return prev
                           return {
                             ...prev,
                             totalAmountOre: newTotal,
                             lineItems: prev.lineItems.map((li) =>
-                              li.id === liId ? { ...li, unitPriceOre: newPrice } : li
+                              li.id === liId ? { ...li, unitPriceOre: newPrice, totalPriceOre: newTotalPrice } : li
                             ),
                           }
                         })
@@ -370,6 +533,18 @@ export function ExpenseDetail() {
             <div className="detail-settled-banner">
               ✓ Settled
             </div>
+          )}
+
+          {correctingRate && household && (
+            <CorrectRateSheet
+              expense={expense}
+              householdId={household.id}
+              onClose={() => setCorrectingRate(false)}
+              onCorrected={(updated) => {
+                setExpense(updated)
+                addOrUpdateExpense(updated)
+              }}
+            />
           )}
         </>
       )}
@@ -431,6 +606,22 @@ export function ExpenseDetail() {
           text-transform: uppercase;
           letter-spacing: 0.03em;
         }
+        .detail-currency-source--corrected {
+          color: #a78bfa;
+        }
+        .detail-correct-rate-btn {
+          align-self: flex-start;
+          margin-top: 0.25rem;
+          background: none;
+          border: none;
+          border-bottom: 1px dashed var(--border-input);
+          color: var(--accent-light);
+          font-size: 0.75rem;
+          font-family: inherit;
+          cursor: pointer;
+          padding: 0;
+        }
+        .detail-correct-rate-btn:hover { border-color: var(--accent); }
         .detail-receipt-img {
           width: 100%;
           border-radius: 12px;

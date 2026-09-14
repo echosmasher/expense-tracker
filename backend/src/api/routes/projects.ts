@@ -17,6 +17,8 @@ import {
   changeExpenseCurrency,
   getExpenseCurrencyContext,
   computeForeignLineAmounts,
+  correctExpenseRate,
+  CorrectRateSchema,
 } from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
 
@@ -620,6 +622,26 @@ projectDetailRouter.post('/expenses/:expenseId/confirm', async (req, res, next) 
     }
 
     await db.query("UPDATE expenses SET status = 'confirmed', updated_at = now() WHERE id = $1", [expenseId])
+
+    const updated = await getFullExpense(expenseId, { projectId })
+    res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── PATCH /projects/:projectId/expenses/:expenseId/rate ─────────────────────
+// Correct a foreign-currency project expense's rate (spec 005, ticket 15) —
+// same rules as the household route: any project member, not draft-gated.
+
+projectDetailRouter.patch('/expenses/:expenseId/rate', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    const body = CorrectRateSchema.parse(req.body)
+    await correctExpenseRate(expenseId, { projectId }, body)
 
     const updated = await getFullExpense(expenseId, { projectId })
     res.json(updated)
