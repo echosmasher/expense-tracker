@@ -560,6 +560,11 @@ describe('household isolation: projects', () => {
     expect(res.status).toBe(403)
   })
 
+  it('cannot read another project’s summary (trip dashboard)', async () => {
+    const res = await asBob(request(app).get(`/api/v1/projects/${projectA}/summary`))
+    expect(res.status).toBe(403)
+  })
+
   it('cannot read a single expense from another project', async () => {
     const res = await asBob(request(app).get(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}`))
     expect(res.status).toBe(403)

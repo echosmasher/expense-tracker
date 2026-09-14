@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { projects } from '@expense-tracker/shared'
-import type { Project, Expense } from '@expense-tracker/shared'
+import { projects, getCurrency } from '@expense-tracker/shared'
+import type { Project, Expense, ProjectSummary } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
@@ -15,6 +15,11 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
 }
 
+function formatMinor(amountMinor: number, currency: string) {
+  const exponent = getCurrency(currency)?.exponent ?? 2
+  return `${(amountMinor / 10 ** exponent).toFixed(exponent)} ${currency}`
+}
+
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -25,6 +30,7 @@ export function ProjectDetail() {
     activeProject?.id === projectId ? activeProject : null
   )
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [summary, setSummary] = useState<ProjectSummary | null>(null)
   const [loading, setLoading] = useState(!project)
   const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,13 +42,15 @@ export function ProjectDetail() {
     if (!projectId) return
     const fetchAll = async () => {
       try {
-        const [proj, expData] = await Promise.all([
+        const [proj, expData, summaryData] = await Promise.all([
           project ? Promise.resolve(project) : projects.get(projectId),
           projects.listExpenses(projectId),
+          projects.getSummary(projectId),
         ])
         setProject(proj)
         setActiveProject(proj)
         setExpenses(expData.expenses)
+        setSummary(summaryData)
       } catch (err: any) {
         setError(err?.message ?? 'Failed to load project.')
       } finally {
@@ -66,7 +74,7 @@ export function ProjectDetail() {
     }
   }
 
-  const totalOre = expenses.reduce((sum, e) => sum + e.totalAmountOre, 0)
+  const totalOre = summary ? summary.homeCurrencyTotalOre : expenses.reduce((sum, e) => sum + e.totalAmountOre, 0)
 
   return (
     <div className="project-detail-page">
@@ -88,6 +96,60 @@ export function ProjectDetail() {
             {project.description && <p className="pd-description">{project.description}</p>}
             <div className="pd-total">{formatNok(totalOre)}</div>
           </div>
+
+          {/* Trip dashboard (spec 005, ticket 16) */}
+          <section className="pd-section">
+            <h2 className="pd-section-title">Trip dashboard</h2>
+            {summary && summary.currencies.length === 0 ? (
+              <div className="pd-dashboard">
+                {summary.draftCount > 0 && (
+                  <p className="pd-draft-note">
+                    {summary.draftCount} draft{summary.draftCount === 1 ? '' : 's'} awaiting review
+                  </p>
+                )}
+                <p className="pd-empty">No confirmed expenses yet.</p>
+              </div>
+            ) : summary ? (
+              <div className="pd-dashboard">
+                {summary.draftCount > 0 && (
+                  <p className="pd-draft-note">
+                    {summary.draftCount} draft{summary.draftCount === 1 ? '' : 's'} awaiting review — not included below
+                  </p>
+                )}
+                {summary.currencies.length > 1 && (
+                  <div className="pd-currency-cards">
+                    {summary.currencies.map((c) => (
+                      <div key={c.currency} className="pd-currency-card">
+                        <div className="pd-currency-code">{c.currency}</div>
+                        <div className="pd-currency-original">{formatMinor(c.originalSumMinor, c.currency)}</div>
+                        <div className="pd-currency-home">
+                          {formatNok(c.homeSumOre)} · {c.count} expense{c.count === 1 ? '' : 's'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {summary.provisionalBalance && (
+                  <div className="pd-provisional">
+                    <div className="pd-provisional-label">Provisional balance — not yet settled</div>
+                    {summary.provisionalBalance.balances.map((b) => (
+                      <div key={b.userId} className="pd-balance-row">
+                        <span>{b.name}</span>
+                        <span className={b.amountOre >= 0 ? 'pd-balance-positive' : 'pd-balance-negative'}>
+                          {formatNok(b.amountOre)}
+                        </span>
+                      </div>
+                    ))}
+                    {summary.provisionalBalance.transactions.map((t, i) => (
+                      <div key={i} className="pd-transfer-row">
+                        {t.fromName} → {t.toName}: {formatNok(t.amountOre)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </section>
 
           {/* Members & split */}
           <section className="pd-section">
@@ -197,6 +259,19 @@ export function ProjectDetail() {
         .pd-finish-btn { width: 100%; background: var(--accent); border: none; border-radius: 10px; color: #fff; font-size: 0.9375rem; font-weight: 500; padding: 0.7rem; cursor: pointer; font-family: inherit; transition: background 0.15s, opacity 0.15s; }
         .pd-finish-btn:hover { background: var(--accent-hover); }
         .pd-finish-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .pd-dashboard { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+        .pd-draft-note { font-size: 0.8rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+        .pd-currency-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem; }
+        .pd-currency-card { background: var(--badge-bg); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 0.6rem 0.7rem; }
+        .pd-currency-code { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
+        .pd-currency-original { font-family: 'DM Mono', monospace; font-size: 0.95rem; margin-top: 2px; }
+        .pd-currency-home { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+        .pd-provisional { border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; margin-top: 0.25rem; }
+        .pd-provisional-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warning); margin-bottom: 0.5rem; }
+        .pd-balance-row { display: flex; justify-content: space-between; font-size: 0.875rem; padding: 0.2rem 0; }
+        .pd-balance-positive { color: var(--success); font-family: 'DM Mono', monospace; }
+        .pd-balance-negative { color: var(--danger); font-family: 'DM Mono', monospace; }
+        .pd-transfer-row { font-size: 0.8rem; color: var(--text-secondary); padding: 0.2rem 0; }
         .pd-settling-banner { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 10px; color: var(--warning); font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
         .pd-settled-banner { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); font-size: 0.875rem; padding: 0.75rem 1rem; text-align: center; }
       `}</style>

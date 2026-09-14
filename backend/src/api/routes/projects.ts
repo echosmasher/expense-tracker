@@ -21,6 +21,7 @@ import {
   CorrectRateSchema,
 } from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
+import { getProjectSettlementInput, calculateProvisionalBalance } from '../../services/projectSettlement.js'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -217,6 +218,78 @@ projectDetailRouter.get('/', async (req, res, next) => {
     await requireProjectMember(projectId, userId)
     const project = await buildProjectResponse(projectId)
     res.json(project)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── GET /projects/:projectId/summary ─────────────────────────────────────────
+// Trip dashboard (spec 005, ticket 16): totals so far, broken down per
+// currency, plus a provisional balance computed without triggering a
+// settlement. See services/projectSettlement.ts for why the provisional
+// balance and finish's settlement share one input-building function.
+
+projectDetailRouter.get('/summary', async (req, res, next) => {
+  try {
+    const { projectId } = req.params as { projectId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    const projectResult = await db.query<{ current_allocation_key_id: string | null }>(
+      'SELECT current_allocation_key_id FROM projects WHERE id = $1',
+      [projectId]
+    )
+    const project = projectResult.rows[0]
+    if (!project) throw new AppError(404, 'NOT_FOUND', 'Project not found')
+
+    const [currencyResult, draftCountResult] = await Promise.all([
+      db.query<{ currency: string; original_sum: string; home_sum: string; count: string }>(
+        `SELECT currency,
+                COALESCE(SUM(COALESCE(original_total_minor, total_amount_ore)), 0)::bigint as original_sum,
+                COALESCE(SUM(total_amount_ore), 0)::bigint as home_sum,
+                COUNT(*) as count
+         FROM expenses WHERE project_id = $1 AND status = 'confirmed'
+         GROUP BY currency ORDER BY currency`,
+        [projectId]
+      ),
+      db.query<{ count: string }>(
+        "SELECT COUNT(*) as count FROM expenses WHERE project_id = $1 AND status = 'pending_review'",
+        [projectId]
+      ),
+    ])
+
+    let provisionalBalance = null
+    if (project.current_allocation_key_id) {
+      const provisional = await calculateProvisionalBalance(projectId, project.current_allocation_key_id)
+      if (provisional) {
+        provisionalBalance = {
+          balances: provisional.result.balances.map((b) => ({
+            userId: b.userId,
+            name: provisional.memberNames.get(b.userId) ?? '',
+            amountOre: b.amountOre,
+          })),
+          transactions: provisional.result.transactions.map((t) => ({
+            fromUserId: t.fromUserId,
+            fromName: provisional.memberNames.get(t.fromUserId) ?? '',
+            toUserId: t.toUserId,
+            toName: provisional.memberNames.get(t.toUserId) ?? '',
+            amountOre: t.amountOre,
+          })),
+        }
+      }
+    }
+
+    res.json({
+      homeCurrencyTotalOre: currencyResult.rows.reduce((sum, r) => sum + Number(r.home_sum), 0),
+      currencies: currencyResult.rows.map((r) => ({
+        currency: r.currency,
+        originalSumMinor: Number(r.original_sum),
+        homeSumOre: Number(r.home_sum),
+        count: Number(r.count),
+      })),
+      draftCount: Number(draftCountResult.rows[0]!.count),
+      provisionalBalance,
+    })
   } catch (err) {
     next(err)
   }
@@ -689,31 +762,10 @@ projectDetailRouter.post('/finish', async (req, res, next) => {
       throw new AppError(400, 'NO_ALLOCATION_KEY', 'Project has no allocation key')
     }
 
-    // All confirmed expenses for this project
-    const expensesResult = await db.query<{ id: string; total_amount_ore: number; purchased_by: string }>(
-      "SELECT id, total_amount_ore, purchased_by FROM expenses WHERE project_id = $1 AND status = 'confirmed'",
-      [projectId]
-    )
-    const sharesResult = await db.query<{ user_id: string; share_bp: number; role: string }>(
-      `SELECT aks.user_id, aks.share_bp, pm.role
-       FROM allocation_key_shares aks
-       JOIN project_members pm
-         ON pm.user_id = aks.user_id AND pm.project_id = $2
-       WHERE aks.allocation_key_id = $1`,
-      [project.current_allocation_key_id, projectId]
-    )
-
-    const { balances, transactions } = calculateSettlement(
-      expensesResult.rows.map((e) => ({
-        purchasedByUserId: e.purchased_by,
-        householdAmountOre: Number(e.total_amount_ore),
-      })),
-      sharesResult.rows.map((s) => ({
-        userId: s.user_id,
-        shareBp: s.share_bp,
-        isAdmin: s.role === 'admin',
-      }))
-    )
+    // Same input-building function the summary route uses for the
+    // provisional balance (spec 005 SC-007) — the two can never diverge.
+    const { expenses, shares } = await getProjectSettlementInput(projectId, project.current_allocation_key_id)
+    const { balances, transactions } = calculateSettlement(expenses, shares)
 
     const settlementId = await db.transaction(async (client) => {
       await client.query("UPDATE projects SET status = 'settling' WHERE id = $1", [projectId])

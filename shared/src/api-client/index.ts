@@ -427,6 +427,17 @@ export interface Project {
   allocationKey: Array<{ userId: string; name: string; shareBp: number }>
 }
 
+export interface ProjectSummary {
+  homeCurrencyTotalOre: number
+  currencies: Array<{ currency: string; originalSumMinor: number; homeSumOre: number; count: number }>
+  draftCount: number
+  // null when there are no confirmed expenses yet (spec 005 US3 scenario 5).
+  provisionalBalance: {
+    balances: Array<{ userId: string; name: string; amountOre: number }>
+    transactions: Array<{ fromUserId: string; fromName: string; toUserId: string; toName: string; amountOre: number }>
+  } | null
+}
+
 export const projects = {
   list: (householdId: string) =>
     request<{ projects: Array<{ id: string; name: string; status: string; memberCount: number }> }>(`/households/${householdId}/projects`),
@@ -434,6 +445,8 @@ export const projects = {
     request<Project>(`/households/${householdId}/projects`, { method: 'POST', body: JSON.stringify(body) }),
   get: (projectId: string) =>
     request<Project>(`/projects/${projectId}`),
+  getSummary: (projectId: string) =>
+    request<ProjectSummary>(`/projects/${projectId}/summary`),
   finish: (projectId: string) =>
     request<Settlement>(`/projects/${projectId}/finish`, { method: 'POST' }),
   listExpenses: (projectId: string) =>

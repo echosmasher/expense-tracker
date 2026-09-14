@@ -54,6 +54,7 @@ Enforcement is deny-by-default: per-route helpers (`requireAuth`, `requireMember
 | — replay of the same `captureId` | returns the existing draft (200), creates nothing else | | | | |
 | `PATCH /projects/:id/expenses/:id`, line-item add/edit/delete, confirm | ✗ | ✗ project member only ✓test; draft (`pending_review`) only, else 409 `INVALID_STATUS` | | | |
 | `PATCH /projects/:id/expenses/:id/rate` (correct a foreign expense's rate) | ✗ | ✗ project member only ✓test; foreign currency only (400 `NOT_FOREIGN_CURRENCY`); refused once settled (409 `EXPENSE_SETTLED`) or in an open settlement (409 `IN_OPEN_SETTLEMENT`) | | | |
+| `GET /projects/:id/summary` (trip dashboard: totals, per-currency breakdown, provisional balance) | ✗ | ✗ project member only ✓test | | | |
 | — confirm on a zero-line-item project draft | rejected: 409 `EMPTY_EXPENSE` | | | | |
 | Projects: finish (trigger settlement) | ✗ | ✗ | project **admin** only ✓test | | |
 | Statistics (overview, drill-down, CSV export) | ✗ | ✗ | ✗ | ✓ scoped ✓test | ✓ |
