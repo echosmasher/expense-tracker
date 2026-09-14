@@ -9,6 +9,10 @@ export interface EditableLineItem {
   description: string
   quantity: number
   unitPriceOre: number
+  // Set (non-null) on a foreign-currency draft's line item — the amount in
+  // the draft's original currency's minor unit; unitPriceOre is then the
+  // server-derived, read-only home-currency amount (spec 005 ticket 14).
+  originalUnitPriceMinor?: number | null
   isPersonal: boolean
   categoryId: string | null
   categoryName: string
@@ -93,17 +97,30 @@ function CategoryBadge({
 export function LineItemEditor({
   items,
   householdId,
+  currency = 'NOK',
+  totalOverride,
   onUpdate,
   onRemove,
   onAdd,
 }: {
   items: EditableLineItem[]
   householdId: string
+  /** The draft's currency. 'NOK' (default) edits unitPriceOre directly;
+   * anything else edits the original-currency amount instead. */
+  currency?: string
+  /** The server-authoritative total (e.g. expense.totalAmountOre). A foreign
+   * line's total_price_ore is a direct conversion of its original total, not
+   * unitPriceOre × quantity — summing unitPriceOre client-side can drift by
+   * a few øre, so callers with a foreign draft should pass the real total
+   * instead of relying on the locally computed one. */
+  totalOverride?: number | undefined
   onUpdate: (index: number, patch: Partial<EditableLineItem>) => void
   onRemove: (index: number) => void
   onAdd: () => void
 }) {
-  const total = items.reduce((sum, item) => (item.isPersonal ? sum : sum + item.unitPriceOre * item.quantity), 0)
+  const isForeign = currency !== 'NOK'
+  const computedTotal = items.reduce((sum, item) => (item.isPersonal ? sum : sum + item.unitPriceOre * item.quantity), 0)
+  const total = totalOverride ?? computedTotal
 
   return (
     <div className="line-item-editor">
@@ -133,15 +150,34 @@ export function LineItemEditor({
                   title="Quantity"
                 />
                 <span className="li-sep">×</span>
-                <input
-                  className="li-price"
-                  type="number"
-                  min="0"
-                  value={item.unitPriceOre}
-                  onChange={(e) => onUpdate(i, { unitPriceOre: Math.round(parseFloat(e.target.value) || 0) })}
-                  title="Unit price (øre)"
-                />
-                <span className="li-ore-label">øre</span>
+                {isForeign ? (
+                  <>
+                    <input
+                      className="li-price"
+                      type="number"
+                      min="0"
+                      value={item.originalUnitPriceMinor ?? 0}
+                      onChange={(e) => onUpdate(i, { originalUnitPriceMinor: Math.round(parseFloat(e.target.value) || 0) })}
+                      title={`Unit price (${currency} minor unit)`}
+                    />
+                    <span className="li-ore-label">{currency}</span>
+                    <span className="li-home-amount" title="Home-currency amount (server-derived)">
+                      = kr {(item.unitPriceOre / 100).toFixed(2).replace('.', ',')}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      className="li-price"
+                      type="number"
+                      min="0"
+                      value={item.unitPriceOre}
+                      onChange={(e) => onUpdate(i, { unitPriceOre: Math.round(parseFloat(e.target.value) || 0) })}
+                      title="Unit price (øre)"
+                    />
+                    <span className="li-ore-label">øre</span>
+                  </>
+                )}
               </div>
             </div>
             <div className="li-actions">
@@ -182,6 +218,7 @@ export function LineItemEditor({
         .li-sep { color: var(--text-faint); font-size: 0.85rem; }
         .li-price { width: 80px; background: var(--bg-base); border: 1px solid var(--border-input); border-radius: 6px; color: var(--text-secondary); font-size: 0.85rem; font-family: 'DM Mono', monospace; padding: 0.25rem 0.4rem; outline: none; text-align: right; }
         .li-ore-label { color: var(--text-faint); font-size: 0.75rem; }
+        .li-home-amount { color: var(--text-muted); font-size: 0.75rem; font-family: 'DM Mono', monospace; margin-left: auto; }
         .li-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
         .li-personal-label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--text-muted); cursor: pointer; }
         .li-personal-cb { accent-color: #6366f1; cursor: pointer; }

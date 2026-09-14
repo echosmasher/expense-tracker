@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { expenses, projects } from '@expense-tracker/shared'
+import { expenses, projects, CURRENCIES } from '@expense-tracker/shared'
 import type { Expense } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
@@ -13,11 +13,29 @@ function formatNok(ore: number) {
   return `kr ${(ore / 100).toFixed(2).replace('.', ',')}`
 }
 
+function formatRate(rateScaled: string, currency: string) {
+  // rateScaled is NOK per one unit of currency, ×10^6.
+  const rate = Number(BigInt(rateScaled)) / 1_000_000
+  return `1 ${currency} = ${rate.toFixed(4)} NOK`
+}
+
+const RATE_SOURCE_LABEL: Record<string, string> = {
+  norges_bank: 'Norges Bank',
+  cached: 'cached',
+  manual: 'manual',
+  corrected: 'corrected',
+  derived: 'derived',
+  pending: 'pending',
+}
+
+const CURRENCY_OPTIONS = ['NOK', ...Object.keys(CURRENCIES).filter((c) => c !== 'NOK').sort()]
+
 function toEditable(expense: Expense): EditableLineItem[] {
   return expense.lineItems.map((li) => ({
     description: li.description,
     quantity: li.quantity,
     unitPriceOre: li.unitPriceOre,
+    originalUnitPriceMinor: li.originalUnitPriceMinor,
     isPersonal: li.isPersonal,
     categoryId: li.categoryId,
     categoryName: li.categoryName ?? 'Uncategorized',
@@ -37,6 +55,8 @@ export function ReviewDraft() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+  const [manualRateInput, setManualRateInput] = useState('')
+  const [showManualRate, setShowManualRate] = useState(false)
   const receiptObjectUrl = useAuthenticatedImage(expense?.receiptImageUrl)
 
   const householdId = household?.id
@@ -50,7 +70,7 @@ export function ReviewDraft() {
     }
   }, [expenseId, projectId, householdId])
 
-  async function patchExpense(patch: { store?: string; date?: string; purchasedBy?: string; cardLastFour?: string }) {
+  async function patchExpense(patch: { store?: string; date?: string; purchasedBy?: string; cardLastFour?: string; currency?: string; rateScaled?: number }) {
     if (!expense || !expenseId) return
     try {
       const updated = projectId
@@ -60,6 +80,27 @@ export function ReviewDraft() {
     } catch (err: any) {
       setError(err?.message ?? 'Failed to save changes.')
     }
+  }
+
+  async function handleCurrencyChange(newCurrency: string) {
+    setShowManualRate(false)
+    setManualRateInput('')
+    await patchExpense({ currency: newCurrency })
+  }
+
+  async function handleManualRateSubmit() {
+    if (!expense) return
+    // 1 unit of the currency = manualRateInput NOK; rateScaled is ×10^6.
+    const nok = parseFloat(manualRateInput.replace(',', '.'))
+    if (!Number.isFinite(nok) || nok <= 0) {
+      setError('Enter a valid rate, e.g. 11.6543')
+      return
+    }
+    const rateScaled = Math.round(nok * 1_000_000)
+    setError(null)
+    await patchExpense({ currency: expense.currency, rateScaled })
+    setShowManualRate(false)
+    setManualRateInput('')
   }
 
   async function updateItem(index: number, patch: Partial<EditableLineItem>) {
@@ -86,7 +127,9 @@ export function ReviewDraft() {
 
   async function addItem() {
     if (!expense || !expenseId) return
-    const body = { description: '', quantity: 1, unitPriceOre: 0, isPersonal: false }
+    const body = expense.currency !== 'NOK'
+      ? { description: '', quantity: 1, originalUnitPriceMinor: 0, isPersonal: false }
+      : { description: '', quantity: 1, unitPriceOre: 0, isPersonal: false }
     try {
       const updated = projectId
         ? await projects.addLineItem(projectId, expenseId, body)
@@ -134,6 +177,10 @@ export function ReviewDraft() {
   const total = expense.totalAmountOre
   const items = toEditable(expense)
   const members = projectId ? null : household?.members
+  const isForeign = expense.currency !== 'NOK'
+  const isPending = expense.rateSource === 'pending'
+  const manualRateVisible = showManualRate || isPending
+  const currencyOptions = CURRENCY_OPTIONS.includes(expense.currency) ? CURRENCY_OPTIONS : [expense.currency, ...CURRENCY_OPTIONS]
 
   return (
     <div className="review-draft-page">
@@ -147,6 +194,50 @@ export function ReviewDraft() {
           <Input type="date" defaultValue={expense.date ?? ''} onBlur={(e) => patchExpense({ date: e.target.value })} />
         </FormField>
       </div>
+
+      <FormField label="Currency">
+        <select
+          className="field-input"
+          value={expense.currency}
+          onChange={(e) => handleCurrencyChange(e.target.value)}
+        >
+          {currencyOptions.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </FormField>
+
+      {isForeign && (
+        <div className="rate-info">
+          {expense.originalTotalMinor !== null && (
+            <span className="rate-info-original">{(expense.originalTotalMinor / 100).toFixed(2)} {expense.currency}</span>
+          )}
+          {isPending ? (
+            <span className="rate-info-pending">rate pending — enter one to confirm</span>
+          ) : expense.rateScaled ? (
+            <span className="rate-info-rate">
+              {formatRate(expense.rateScaled, expense.currency)}
+              {expense.rateSource && <span className="rate-info-source"> · {RATE_SOURCE_LABEL[expense.rateSource] ?? expense.rateSource}</span>}
+            </span>
+          ) : null}
+          {!manualRateVisible && (
+            <button type="button" className="rate-manual-toggle" onClick={() => setShowManualRate(true)}>
+              Enter rate manually
+            </button>
+          )}
+          {manualRateVisible && (
+            <div className="rate-manual-row">
+              <Input
+                type="text"
+                placeholder={`1 ${expense.currency} = ? NOK`}
+                value={manualRateInput}
+                onChange={(e) => setManualRateInput(e.target.value)}
+              />
+              <Button onClick={handleManualRateSubmit}>Save rate</Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {members && (
         <FormField label="Purchased by">
@@ -171,6 +262,8 @@ export function ReviewDraft() {
       <LineItemEditor
         items={items}
         householdId={householdId ?? ''}
+        currency={expense.currency}
+        totalOverride={isForeign ? expense.totalAmountOre : undefined}
         onUpdate={updateItem}
         onRemove={removeItem}
         onAdd={addItem}
@@ -179,8 +272,8 @@ export function ReviewDraft() {
       {error && <p className="review-draft-error">{error}</p>}
 
       <div style={{ marginTop: '1.5rem' }}>
-        <Button loading={confirming} onClick={handleConfirm}>
-          Confirm expense · {formatNok(total)}
+        <Button loading={confirming} disabled={isPending} onClick={handleConfirm}>
+          {isPending ? 'Enter a rate to confirm' : `Confirm expense · ${formatNok(total)}`}
         </Button>
       </div>
 
@@ -202,6 +295,19 @@ export function ReviewDraft() {
         .review-draft-msg { text-align: center; color: var(--text-muted); padding: 2rem 0; }
         .review-draft-msg--error { color: var(--danger); }
         .review-draft-error { color: var(--danger); font-size: 0.85rem; margin: 0; }
+        .rate-info {
+          display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
+          background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+          padding: 0.6rem 0.875rem; font-size: 0.82rem;
+        }
+        .rate-info-original { font-family: 'DM Mono', monospace; color: var(--text-primary); }
+        .rate-info-rate { color: var(--text-secondary); }
+        .rate-info-source { color: var(--text-faint); }
+        .rate-info-pending { color: var(--warning); }
+        .rate-manual-toggle { background: none; border: none; color: var(--accent-light); font-size: 0.8rem; font-family: inherit; cursor: pointer; padding: 0; margin-left: auto; }
+        .rate-manual-row { display: flex; gap: 0.5rem; align-items: center; width: 100%; }
+        .rate-manual-row input { flex: 1; }
+        .rate-manual-row button { width: auto; }
       `}</style>
     </div>
   )

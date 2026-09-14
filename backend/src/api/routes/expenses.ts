@@ -9,7 +9,16 @@ import { receiptUpload } from '../receiptUpload.js'
 import { receiptParseLimiter } from '../middleware/rateLimit.js'
 import { intakeReceipt } from '../../services/receiptIntake.js'
 import { createDraftFromIntake } from '../../services/draftExpense.js'
-import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate, convertForeignLine } from '../../services/expenseView.js'
+import {
+  getFullExpense,
+  recomputeExpenseTotal,
+  UpdateExpenseSchema,
+  buildExpenseUpdate,
+  convertForeignLine,
+  changeExpenseCurrency,
+  getExpenseCurrencyContext,
+  computeForeignLineAmounts,
+} from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
 
 const router = Router({ mergeParams: true })
@@ -323,14 +332,17 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
     const userId = req.user!.userId
     await requireActiveMember(householdId, userId)
 
-    const result = await db.query<{ id: string; status: string; purchased_by: string }>(
-      'SELECT id, status, purchased_by FROM expenses WHERE id = $1 AND household_id = $2',
+    const result = await db.query<{ id: string; status: string; purchased_by: string; rate_source: string | null }>(
+      'SELECT id, status, purchased_by, rate_source FROM expenses WHERE id = $1 AND household_id = $2',
       [expenseId, householdId]
     )
     const expense = result.rows[0]
     if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
     if (expense.status !== 'pending_review') {
       throw new AppError(409, 'INVALID_STATUS', 'Only pending_review expenses can be confirmed')
+    }
+    if (expense.rate_source === 'pending') {
+      throw new AppError(409, 'RATE_PENDING', 'Enter an exchange rate before confirming this expense')
     }
 
     const lineItemCount = await db.query('SELECT 1 FROM line_items WHERE expense_id = $1 LIMIT 1', [expenseId])
@@ -354,6 +366,7 @@ router.post('/:expenseId/confirm', async (req, res, next) => {
 
 const UpdateLineItemSchema = z.object({
   unitPriceOre: z.number().int().min(0).optional(),
+  originalUnitPriceMinor: z.number().int().min(0).optional(),
   quantity: z.number().int().min(1).optional(),
   description: z.string().min(1).optional(),
   isPersonal: z.boolean().optional(),
@@ -372,18 +385,20 @@ lineItemRouter.patch('/', async (req, res, next) => {
     await requireActiveMember(householdId, userId)
 
     // Verify expense belongs to household
-    const expCheck = await db.query(
-      'SELECT id FROM expenses WHERE id = $1 AND household_id = $2',
+    const expCheck = await db.query<{ id: string; status: string }>(
+      'SELECT id, status FROM expenses WHERE id = $1 AND household_id = $2',
       [expenseId, householdId]
     )
-    if (expCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Expense not found')
+    const expRow = expCheck.rows[0]
+    if (!expRow) throw new AppError(404, 'NOT_FOUND', 'Expense not found')
 
     // Verify line item belongs to expense
-    const liCheck = await db.query(
-      'SELECT id FROM line_items WHERE id = $1 AND expense_id = $2',
+    const liCheck = await db.query<{ id: string; quantity: number; original_unit_price_minor: string | null }>(
+      'SELECT id, quantity, original_unit_price_minor FROM line_items WHERE id = $1 AND expense_id = $2',
       [lineItemId, expenseId]
     )
-    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+    const liRow = liCheck.rows[0]
+    if (!liRow) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
 
     const body = UpdateLineItemSchema.parse(req.body)
 
@@ -391,15 +406,41 @@ lineItemRouter.patch('/', async (req, res, next) => {
     const sets: string[] = []
     const params: unknown[] = []
     let i = 1
-    if (body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
-    if (body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
+
+    // A foreign-currency draft is edited by original amount; the server
+    // derives both home columns (ticket 14). A confirmed expense, or one in
+    // the home currency, keeps the existing direct unit_price_ore edit —
+    // rate correction on a confirmed foreign expense is ticket 15.
+    const isForeignDraft = expRow.status === 'pending_review'
+    let convertedForeignAmounts = false
+    if (isForeignDraft && (body.originalUnitPriceMinor !== undefined || body.quantity !== undefined)) {
+      const ctx = await getExpenseCurrencyContext(expenseId)
+      if (ctx.isForeign) {
+        const quantity = body.quantity ?? liRow.quantity
+        const originalUnitPriceMinor = body.originalUnitPriceMinor ?? (liRow.original_unit_price_minor !== null ? Number(liRow.original_unit_price_minor) : 0)
+        const computed = computeForeignLineAmounts(originalUnitPriceMinor, quantity, ctx)
+        sets.push(`quantity = $${i++}`); params.push(quantity)
+        sets.push(`original_unit_price_minor = $${i++}`); params.push(originalUnitPriceMinor)
+        sets.push(`original_total_minor = $${i++}`); params.push(computed.originalTotalMinor)
+        sets.push(`unit_price_ore = $${i++}`); params.push(computed.unitPriceOre)
+        sets.push(`total_price_ore = $${i++}`); params.push(computed.totalPriceOre)
+        convertedForeignAmounts = true
+      }
+    }
+    if (!convertedForeignAmounts && body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
+    if (!convertedForeignAmounts && body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
     if (body.description !== undefined) { sets.push(`description = $${i++}`); params.push(body.description) }
     if (body.isPersonal !== undefined) { sets.push(`is_personal = $${i++}`); params.push(body.isPersonal) }
     if (body.categoryId !== undefined) { sets.push(`category_id = $${i++}`); params.push(body.categoryId) }
     params.push(lineItemId)
 
     await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
-    await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
+    // Home-currency (or non-draft) path: total_price_ore always tracks
+    // unit_price_ore × quantity. The foreign-draft branch above already set
+    // total_price_ore directly from the converted original amount.
+    if (!convertedForeignAmounts) {
+      await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
+    }
     const newTotalAmountOre = await recomputeExpenseTotal(expenseId)
 
     // Return updated line item
@@ -508,10 +549,15 @@ router.patch('/:expenseId', async (req, res, next) => {
       }
     }
 
-    const { sets, params } = buildExpenseUpdate(body)
-    params.push(expenseId)
+    if (body.currency !== undefined) {
+      await changeExpenseCurrency(expenseId, body.currency, body.rateScaled !== undefined ? BigInt(body.rateScaled) : null)
+    }
 
-    await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+    const { sets, params } = buildExpenseUpdate(body)
+    if (sets.length > 0) {
+      params.push(expenseId)
+      await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+    }
 
     const updated = await getFullExpense(expenseId, { householdId })
     res.json(updated)
@@ -530,24 +576,46 @@ router.post('/:expenseId/line-items', async (req, res, next) => {
     await requireDraftExpense(householdId, expenseId)
 
     const body = LineItemSchema.parse(req.body)
-    // Foreign-currency drafts gain a currency-aware add-line-item path in a
-    // later ticket; for now this route is home-currency only.
-    if (!Number.isInteger(body.unitPriceOre)) {
-      throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${body.unitPriceOre})`)
+    const ctx = await getExpenseCurrencyContext(expenseId)
+
+    let unitPriceOre: number
+    let totalPriceOre: number
+    let originalUnitPriceMinor: number | null = null
+    let originalTotalMinor: number | null = null
+
+    if (ctx.isForeign) {
+      if (!Number.isInteger(body.originalUnitPriceMinor)) {
+        throw new AppError(400, 'NON_INTEGER_AMOUNT', 'originalUnitPriceMinor must be provided and an integer for a foreign-currency draft')
+      }
+      const computed = computeForeignLineAmounts(body.originalUnitPriceMinor!, body.quantity, ctx)
+      unitPriceOre = computed.unitPriceOre
+      totalPriceOre = computed.totalPriceOre
+      originalUnitPriceMinor = body.originalUnitPriceMinor!
+      originalTotalMinor = computed.originalTotalMinor
+    } else {
+      if (!Number.isInteger(body.unitPriceOre)) {
+        throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${body.unitPriceOre})`)
+      }
+      unitPriceOre = body.unitPriceOre!
+      totalPriceOre = unitPriceOre * body.quantity
     }
 
     await db.query(
-      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO line_items
+         (expense_id, description, quantity, unit_price_ore, total_price_ore, tag_id, is_personal, category_id,
+          original_unit_price_minor, original_total_minor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         expenseId,
         body.description,
         body.quantity,
-        body.unitPriceOre,
-        body.unitPriceOre! * body.quantity,
+        unitPriceOre,
+        totalPriceOre,
         body.tagId ?? null,
         body.isPersonal,
         body.categoryId ?? null,
+        originalUnitPriceMinor,
+        originalTotalMinor,
       ]
     )
     await recomputeExpenseTotal(expenseId)

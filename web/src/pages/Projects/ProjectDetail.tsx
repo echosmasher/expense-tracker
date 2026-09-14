@@ -83,6 +83,7 @@ export function ProjectDetail() {
             <div className="pd-head-row">
               <h1 className="pd-name">{project.name}</h1>
               <span className={`pd-status pd-status--${project.status}`}>{project.status}</span>
+              {project.defaultCurrency && <span className="pd-status pd-status--currency">{project.defaultCurrency}</span>}
             </div>
             {project.description && <p className="pd-description">{project.description}</p>}
             <div className="pd-total">{formatNok(totalOre)}</div>
@@ -171,6 +172,7 @@ export function ProjectDetail() {
         .pd-status--active { background: rgba(34,197,94,0.1); color: var(--success); border: 1px solid rgba(34,197,94,0.2); }
         .pd-status--settling { background: rgba(251,191,36,0.12); color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
         .pd-status--settled { background: var(--badge-bg); color: var(--text-muted); border: 1px solid var(--border-input); }
+        .pd-status--currency { background: var(--badge-bg); color: var(--text-secondary); border: 1px solid var(--border-input); }
         .pd-description { color: var(--text-muted); font-size: 0.875rem; margin: 0 0 0.75rem; }
         .pd-total { font-family: 'DM Mono', monospace; font-size: 1.75rem; font-weight: 500; letter-spacing: -0.02em; }
         .pd-section { margin-bottom: 1.5rem; }

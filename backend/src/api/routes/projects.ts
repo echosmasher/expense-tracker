@@ -9,7 +9,16 @@ import { receiptUpload } from '../receiptUpload.js'
 import { receiptParseLimiter } from '../middleware/rateLimit.js'
 import { intakeReceipt } from '../../services/receiptIntake.js'
 import { createDraftFromIntake } from '../../services/draftExpense.js'
-import { getFullExpense, recomputeExpenseTotal, UpdateExpenseSchema, buildExpenseUpdate } from '../../services/expenseView.js'
+import {
+  getFullExpense,
+  recomputeExpenseTotal,
+  UpdateExpenseSchema,
+  buildExpenseUpdate,
+  changeExpenseCurrency,
+  getExpenseCurrencyContext,
+  computeForeignLineAmounts,
+} from '../../services/expenseView.js'
+import { getCurrency } from '@expense-tracker/shared'
 
 const router = Router({ mergeParams: true })
 router.use(requireAuth)
@@ -41,7 +50,7 @@ async function requireProjectMember(projectId: string, userId: string) {
 
 async function buildProjectResponse(projectId: string) {
   const [projectResult, membersResult, allocationResult] = await Promise.all([
-    db.query<{ id: string; household_id: string; name: string; description: string | null; status: string; current_allocation_key_id: string | null }>(
+    db.query<{ id: string; household_id: string; name: string; description: string | null; status: string; current_allocation_key_id: string | null; default_currency: string | null }>(
       'SELECT * FROM projects WHERE id = $1',
       [projectId]
     ),
@@ -66,6 +75,7 @@ async function buildProjectResponse(projectId: string) {
     name: p.name,
     description: p.description,
     status: p.status,
+    defaultCurrency: p.default_currency,
     members: membersResult.rows.map((m) => ({ userId: m.user_id, name: m.name, role: m.role })),
     allocationKey: allocationResult.rows.map((s) => ({ userId: s.user_id, name: s.name, shareBp: s.share_bp })),
   }
@@ -78,6 +88,9 @@ const CreateProjectSchema = z.object({
   description: z.string().optional(),
   memberIds: z.array(z.string().uuid()).min(1),
   allocationKey: z.array(AllocationShareSchema).min(1),
+  // Pre-selects the currency picker for expenses created inside this
+  // project; 'NOK' (the household's home currency) needs no entry.
+  defaultCurrency: z.string().length(3).optional(),
 })
 
 router.post('/', async (req, res, next) => {
@@ -98,6 +111,11 @@ router.post('/', async (req, res, next) => {
       throw new AppError(400, 'ALLOCATION_KEY_MUST_SUM_TO_10000', 'Allocation key must sum to 10000 basis points')
     }
 
+    const defaultCurrency = body.defaultCurrency?.toUpperCase()
+    if (defaultCurrency !== undefined && defaultCurrency !== 'NOK' && !getCurrency(defaultCurrency)) {
+      throw new AppError(400, 'UNKNOWN_CURRENCY', `Unknown currency: ${defaultCurrency}`)
+    }
+
     // Every project member must belong to this household — otherwise an outsider
     // could be pulled into the project's settlement math.
     const uniqueMemberIds = [...new Set(body.memberIds)]
@@ -111,8 +129,8 @@ router.post('/', async (req, res, next) => {
 
     const projectId = await db.transaction(async (client) => {
       const pResult = await client.query<{ id: string }>(
-        "INSERT INTO projects (household_id, name, description, status) VALUES ($1, $2, $3, 'active') RETURNING id",
-        [householdId, body.name, body.description ?? null]
+        "INSERT INTO projects (household_id, name, description, status, default_currency) VALUES ($1, $2, $3, 'active', $4) RETURNING id",
+        [householdId, body.name, body.description ?? null, defaultCurrency ?? null]
       )
       const pid = pResult.rows[0]!.id
 
@@ -208,7 +226,10 @@ projectDetailRouter.get('/', async (req, res, next) => {
 const ProjectLineItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.number().int().positive(),
-  unitPriceOre: z.number().int(),
+  unitPriceOre: z.number().int().optional(),
+  // A foreign-currency draft's line item (ticket 14) is edited by original
+  // amount instead — see requireProjectDraftExpense callers below.
+  originalUnitPriceMinor: z.number().int().optional(),
   isPersonal: z.boolean().default(false),
   categoryId: z.string().uuid().optional(),
 })
@@ -249,9 +270,17 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
     // someone outside the project when the settlement is calculated.
     await requirePurchaserIsProjectMember(projectId, body.purchasedBy)
 
+    // Manual project expense entry is home-currency only (foreign hand entry
+    // goes through POST /households/:id/expenses, ticket 13).
+    for (const li of body.lineItems) {
+      if (!Number.isInteger(li.unitPriceOre)) {
+        throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${li.unitPriceOre})`)
+      }
+    }
+
     // Exclude personal items — total_amount_ore is the project-billable amount
     const totalAmountOre = body.lineItems.reduce(
-      (sum, li) => (li.isPersonal ? sum : sum + li.unitPriceOre * li.quantity),
+      (sum, li) => (li.isPersonal ? sum : sum + li.unitPriceOre! * li.quantity),
       0,
     )
 
@@ -275,7 +304,7 @@ projectDetailRouter.post('/expenses', async (req, res, next) => {
       for (const li of body.lineItems) {
         await client.query(
           'INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-          [eid, li.description, li.quantity, li.unitPriceOre, li.unitPriceOre * li.quantity, li.isPersonal, li.categoryId ?? null]
+          [eid, li.description, li.quantity, li.unitPriceOre, li.unitPriceOre! * li.quantity, li.isPersonal, li.categoryId ?? null]
         )
       }
       return eid
@@ -391,10 +420,15 @@ projectDetailRouter.patch('/expenses/:expenseId', async (req, res, next) => {
       await requirePurchaserIsProjectMember(projectId, body.purchasedBy)
     }
 
-    const { sets, params } = buildExpenseUpdate(body)
-    params.push(expenseId)
+    if (body.currency !== undefined) {
+      await changeExpenseCurrency(expenseId, body.currency, body.rateScaled !== undefined ? BigInt(body.rateScaled) : null)
+    }
 
-    await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+    const { sets, params } = buildExpenseUpdate(body)
+    if (sets.length > 0) {
+      params.push(expenseId)
+      await db.query(`UPDATE expenses SET ${sets.join(', ')}, updated_at = now() WHERE id = $${params.length}`, params)
+    }
 
     const updated = await getFullExpense(expenseId, { projectId })
     res.json(updated)
@@ -425,18 +459,45 @@ projectDetailRouter.post('/expenses/:expenseId/line-items', async (req, res, nex
     await requireProjectDraftExpense(projectId, expenseId)
 
     const body = ProjectLineItemSchema.parse(req.body)
+    const ctx = await getExpenseCurrencyContext(expenseId)
+
+    let unitPriceOre: number
+    let totalPriceOre: number
+    let originalUnitPriceMinor: number | null = null
+    let originalTotalMinor: number | null = null
+
+    if (ctx.isForeign) {
+      if (!Number.isInteger(body.originalUnitPriceMinor)) {
+        throw new AppError(400, 'NON_INTEGER_AMOUNT', 'originalUnitPriceMinor must be provided and an integer for a foreign-currency draft')
+      }
+      const computed = computeForeignLineAmounts(body.originalUnitPriceMinor!, body.quantity, ctx)
+      unitPriceOre = computed.unitPriceOre
+      totalPriceOre = computed.totalPriceOre
+      originalUnitPriceMinor = body.originalUnitPriceMinor!
+      originalTotalMinor = computed.originalTotalMinor
+    } else {
+      if (!Number.isInteger(body.unitPriceOre)) {
+        throw new AppError(400, 'NON_INTEGER_AMOUNT', `unitPriceOre must be an integer (received ${body.unitPriceOre})`)
+      }
+      unitPriceOre = body.unitPriceOre!
+      totalPriceOre = unitPriceOre * body.quantity
+    }
 
     await db.query(
-      `INSERT INTO line_items (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO line_items
+         (expense_id, description, quantity, unit_price_ore, total_price_ore, is_personal, category_id,
+          original_unit_price_minor, original_total_minor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         expenseId,
         body.description,
         body.quantity,
-        body.unitPriceOre,
-        body.unitPriceOre * body.quantity,
+        unitPriceOre,
+        totalPriceOre,
         body.isPersonal,
         body.categoryId ?? null,
+        originalUnitPriceMinor,
+        originalTotalMinor,
       ]
     )
     await recomputeExpenseTotal(expenseId)
@@ -450,6 +511,7 @@ projectDetailRouter.post('/expenses/:expenseId/line-items', async (req, res, nex
 
 const UpdateProjectLineItemSchema = z.object({
   unitPriceOre: z.number().int().min(0).optional(),
+  originalUnitPriceMinor: z.number().int().min(0).optional(),
   quantity: z.number().int().min(1).optional(),
   description: z.string().min(1).optional(),
   isPersonal: z.boolean().optional(),
@@ -463,23 +525,45 @@ projectDetailRouter.patch('/expenses/:expenseId/line-items/:lineItemId', async (
     await requireProjectMember(projectId, userId)
     await requireProjectDraftExpense(projectId, expenseId)
 
-    const liCheck = await db.query('SELECT id FROM line_items WHERE id = $1 AND expense_id = $2', [lineItemId, expenseId])
-    if (liCheck.rows.length === 0) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
+    const liCheck = await db.query<{ id: string; quantity: number; original_unit_price_minor: string | null }>(
+      'SELECT id, quantity, original_unit_price_minor FROM line_items WHERE id = $1 AND expense_id = $2',
+      [lineItemId, expenseId]
+    )
+    const liRow = liCheck.rows[0]
+    if (!liRow) throw new AppError(404, 'NOT_FOUND', 'Line item not found')
 
     const body = UpdateProjectLineItemSchema.parse(req.body)
+    const ctx = await getExpenseCurrencyContext(expenseId)
 
     const sets: string[] = []
     const params: unknown[] = []
     let i = 1
-    if (body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
-    if (body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
+    let convertedForeignAmounts = false
+
+    // requireProjectDraftExpense already pinned status = pending_review, so
+    // a project line-item edit is always the draft path (ticket 14).
+    if (ctx.isForeign && (body.originalUnitPriceMinor !== undefined || body.quantity !== undefined)) {
+      const quantity = body.quantity ?? liRow.quantity
+      const originalUnitPriceMinor = body.originalUnitPriceMinor ?? (liRow.original_unit_price_minor !== null ? Number(liRow.original_unit_price_minor) : 0)
+      const computed = computeForeignLineAmounts(originalUnitPriceMinor, quantity, ctx)
+      sets.push(`quantity = $${i++}`); params.push(quantity)
+      sets.push(`original_unit_price_minor = $${i++}`); params.push(originalUnitPriceMinor)
+      sets.push(`original_total_minor = $${i++}`); params.push(computed.originalTotalMinor)
+      sets.push(`unit_price_ore = $${i++}`); params.push(computed.unitPriceOre)
+      sets.push(`total_price_ore = $${i++}`); params.push(computed.totalPriceOre)
+      convertedForeignAmounts = true
+    }
+    if (!convertedForeignAmounts && body.unitPriceOre !== undefined) { sets.push(`unit_price_ore = $${i++}`); params.push(body.unitPriceOre) }
+    if (!convertedForeignAmounts && body.quantity !== undefined) { sets.push(`quantity = $${i++}`); params.push(body.quantity) }
     if (body.description !== undefined) { sets.push(`description = $${i++}`); params.push(body.description) }
     if (body.isPersonal !== undefined) { sets.push(`is_personal = $${i++}`); params.push(body.isPersonal) }
     if (body.categoryId !== undefined) { sets.push(`category_id = $${i++}`); params.push(body.categoryId) }
     params.push(lineItemId)
 
     await db.query(`UPDATE line_items SET ${sets.join(', ')} WHERE id = $${i}`, params)
-    await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
+    if (!convertedForeignAmounts) {
+      await db.query('UPDATE line_items SET total_price_ore = unit_price_ore * quantity WHERE id = $1', [lineItemId])
+    }
     await recomputeExpenseTotal(expenseId)
 
     const updated = await getFullExpense(expenseId, { projectId })
@@ -517,14 +601,17 @@ projectDetailRouter.post('/expenses/:expenseId/confirm', async (req, res, next) 
     const userId = req.user!.userId
     await requireProjectMember(projectId, userId)
 
-    const result = await db.query<{ status: string }>(
-      'SELECT status FROM expenses WHERE id = $1 AND project_id = $2',
+    const result = await db.query<{ status: string; rate_source: string | null }>(
+      'SELECT status, rate_source FROM expenses WHERE id = $1 AND project_id = $2',
       [expenseId, projectId]
     )
     const expense = result.rows[0]
     if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
     if (expense.status !== 'pending_review') {
       throw new AppError(409, 'INVALID_STATUS', 'Only pending_review expenses can be confirmed')
+    }
+    if (expense.rate_source === 'pending') {
+      throw new AppError(409, 'RATE_PENDING', 'Enter an exchange rate before confirming this expense')
     }
 
     const lineItemCount = await db.query('SELECT 1 FROM line_items WHERE expense_id = $1 LIMIT 1', [expenseId])

@@ -267,7 +267,10 @@ export interface Expense {
 export interface DraftLineItemInput {
   description: string
   quantity: number
-  unitPriceOre: number
+  /** Home-currency drafts set this. A foreign-currency draft sets
+   * originalUnitPriceMinor instead — the server derives this. */
+  unitPriceOre?: number | undefined
+  originalUnitPriceMinor?: number | undefined
   tagId?: string | undefined
   isPersonal?: boolean | undefined
   categoryId?: string | undefined
@@ -303,7 +306,7 @@ export const expenses = {
   confirm: (householdId: string, expenseId: string) =>
     request<Expense>(`/households/${householdId}/expenses/${expenseId}/confirm`, { method: 'POST' }),
   updateLineItem: (householdId: string, expenseId: string, lineItemId: string, body: {
-    unitPriceOre?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
+    unitPriceOre?: number; originalUnitPriceMinor?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
   }) =>
     request<Expense['lineItems'][0] & { newTotalAmountOre: number }>(
       `/households/${householdId}/expenses/${expenseId}/line-items/${lineItemId}`,
@@ -321,6 +324,9 @@ export const expenses = {
 
   update: (householdId: string, expenseId: string, body: {
     store?: string; date?: string; purchasedBy?: string; cardLastFour?: string
+    /** Changing the currency re-resolves the rate; pass rateScaled in the
+     * same call to store a manual rate instead. */
+    currency?: string; rateScaled?: number
   }) =>
     request<Expense>(`/households/${householdId}/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
@@ -398,6 +404,9 @@ export interface Project {
   name: string
   description: string | null
   status: 'active' | 'settling' | 'settled'
+  /** Pre-selects the currency picker for expenses created inside this
+   * project; null means the household's home currency. */
+  defaultCurrency: string | null
   members: Array<{ userId: string; name: string; role: 'admin' | 'member' }>
   allocationKey: Array<{ userId: string; name: string; shareBp: number }>
 }
@@ -427,6 +436,7 @@ export const projects = {
 
   updateExpense: (projectId: string, expenseId: string, body: {
     store?: string; date?: string; purchasedBy?: string; cardLastFour?: string
+    currency?: string; rateScaled?: number
   }) =>
     request<Expense>(`/projects/${projectId}/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
@@ -440,7 +450,7 @@ export const projects = {
     }),
 
   updateLineItem: (projectId: string, expenseId: string, lineItemId: string, body: {
-    unitPriceOre?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
+    unitPriceOre?: number; originalUnitPriceMinor?: number; quantity?: number; description?: string; isPersonal?: boolean; categoryId?: string | null
   }) =>
     request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items/${lineItemId}`, {
       method: 'PATCH',

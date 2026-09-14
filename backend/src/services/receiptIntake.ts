@@ -24,6 +24,9 @@ export interface ReceiptIntakeResult {
   store: string | null
   date: string | null
   cardLastFour: string | null
+  // ISO 4217 code as detected by the parser, or null (see ParsedReceipt).
+  // `items[].unitPriceOre` is in this currency's minor unit when set.
+  currency: string | null
   items: IntakeItem[]
 }
 
@@ -73,6 +76,7 @@ export async function intakeReceipt(
     store: parsed.store,
     date: parsed.date,
     cardLastFour: matchedCardLastFour,
+    currency: parsed.currency,
     items: parsed.items.map((item, i) => ({
       description: item.description,
       quantity: item.quantity,

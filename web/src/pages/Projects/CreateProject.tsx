@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { projects } from '@expense-tracker/shared'
+import { projects, CURRENCIES } from '@expense-tracker/shared'
 import { useAuthStore } from '../../stores/authStore'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useProjectStore } from '../../stores/projectStore'
@@ -17,6 +17,7 @@ export function CreateProject() {
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [defaultCurrency, setDefaultCurrency] = useState('NOK')
   // Member selection: creator is always included
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set([userId]))
   // Allocation shares: equal split by default
@@ -68,6 +69,7 @@ export function CreateProject() {
         description: description.trim() || undefined,
         memberIds: selected.map((m) => m.userId),
         allocationKey: parsedShares,
+        defaultCurrency: defaultCurrency === 'NOK' ? undefined : defaultCurrency,
       })
       addProject(project)
       navigate(`/projects/${project.id}`)
@@ -103,6 +105,15 @@ export function CreateProject() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+        </FormField>
+
+        <FormField label="Default currency (optional)">
+          <select className="field-input" value={defaultCurrency} onChange={(e) => setDefaultCurrency(e.target.value)}>
+            <option value="NOK">NOK (household default)</option>
+            {Object.keys(CURRENCIES).filter((c) => c !== 'NOK').sort().map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </FormField>
 
         <div>
