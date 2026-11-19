@@ -43,3 +43,11 @@ HANDOFF.md
 
 # Database backups (pg_dump output) - local only
 backups/
+
+# Local backups / disabled configs - may contain secrets, never committed
+*.bak
+*.bak-*
+*.disabled
+*.orig
+.env.bak*
+.env.*.bak*

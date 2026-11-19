@@ -21,44 +21,21 @@ Volumes `postgres_data` and `minio_data` are created by Docker on the host's loc
 
 - Docker (with Compose v2 — i.e. `docker compose ...`, not `docker-compose`)
 - `git`
-- Access to the private GitHub repo `echosmasher/expense-tracker`
+- Network access to the public GitHub repo `echosmasher/expense-tracker`
 - Free ports on the host: by default `80` (web) and `9000` (MinIO). If `80` is already taken, you can change `WEB_PORT` (see step 3).
 
 ## Step 1 — Get the code onto the server
 
-The repo is private, so the server needs credentials. Recommended: a **deploy key** (read-only SSH key scoped to this single repo).
-
-On the server:
-
-```bash
-# Generate a deploy key
-ssh-keygen -t ed25519 -f ~/.ssh/expense_tracker_deploy -N "" -C "expense-tracker-deploy"
-
-# Show the public key — copy this output
-cat ~/.ssh/expense_tracker_deploy.pub
-```
-
-Then in GitHub: **Repo → Settings → Deploy keys → Add deploy key**, paste the public key, leave "allow write access" unchecked.
-
-Tell ssh to use this key for github.com (one-off):
-
-```bash
-cat >> ~/.ssh/config <<'EOF'
-Host github.com
-    IdentityFile ~/.ssh/expense_tracker_deploy
-    IdentitiesOnly yes
-EOF
-chmod 600 ~/.ssh/config
-```
-
-Now clone:
+The repo is public, so no credentials are needed to clone it over HTTPS:
 
 ```bash
 # Pick a place for the project — e.g. ~/apps
 mkdir -p ~/apps && cd ~/apps
-git clone git@github.com:echosmasher/expense-tracker.git
+git clone https://github.com/echosmasher/expense-tracker.git
 cd expense-tracker
 ```
+
+If the repo is ever made private again, use a read-only **deploy key** instead (Repo → Settings → Deploy keys, "allow write access" unchecked) and clone with `git@github.com:echosmasher/expense-tracker.git`.
 
 You should be on the `master` branch (it's the default).
 
