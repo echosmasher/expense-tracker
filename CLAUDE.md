@@ -17,7 +17,7 @@ A self-hosted shared household expense tracker. Three-package npm workspace mono
 - **Monetary amounts**: all stored and computed as integers in øre (100 øre = 1 NOK). Non-integer amounts are rejected
 - **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
 - **Settlement scope**: snapshot-based (spec 003) — each settlement records the expenses included via `settlement_expenses`; not bound to a calendar month. Statistics still bucket expenses by `expense_date`.
-- **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
+- **Receipt parsing**: OpenAI `gpt-6-luna` multimodal, 15s timeout, fallback returns empty items. `backend/src/services/receiptParser.ts`
 - **Image uploads**: every receipt/avatar is re-encoded via `sharp` (`backend/src/services/imageSanitizer.ts`) to strip metadata (incl. GPS EXIF), validate it's a real image, and cap dimensions — before storage or egress to OpenAI
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h. `backend/src/storage/minio.ts`
 

@@ -33,7 +33,7 @@ nothing on the host listens on a public port at all.
 - Accounts:
   - **Cloudflare** — Zero Trust tunnel + DNS + TLS termination.
   - **Resend** (resend.com) — transactional email for invites and settlement notifications.
-  - **OpenAI** — used by `backend/src/services/receiptParser.ts` for receipt OCR (`gpt-4o-mini`). Free tier won't be enough long-term; budget a few dollars/month.
+  - **OpenAI** — used by `backend/src/services/receiptParser.ts` for receipt OCR (`gpt-6-luna`). Free tier won't be enough long-term; budget a few dollars/month.
 
 ## Step 1 — Get the code on the host
 

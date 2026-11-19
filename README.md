@@ -16,7 +16,7 @@ A self-hosted shared household expense tracker. Three-package npm workspace mono
 - **JWT auth**: 15min access token (Bearer) + 30-day rotating refresh token (httpOnly cookie)
 - **Monetary amounts**: all stored and computed as integers in øre (100 øre = 1 NOK). Non-integer amounts are rejected
 - **Settlement algorithm**: pure integer arithmetic, greedy minimum-transactions, rounding remainder to admin. Lives in `shared/src/calc/settlement.ts`
-- **Receipt parsing**: OpenAI `gpt-4o-mini` multimodal, 15s timeout, fallback returns empty items
+- **Receipt parsing**: OpenAI `gpt-6-luna` multimodal, 15s timeout, fallback returns empty items
 - **Image uploads**: every receipt/avatar is re-encoded via `sharp` to strip metadata (incl. GPS EXIF), validate it's a real image, and cap dimensions
 - **File storage**: MinIO (S3-compatible). Signed URLs expire 1h
 

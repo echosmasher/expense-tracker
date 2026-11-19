@@ -15,7 +15,7 @@ Modified principles:
     shared-package-with-mobile clause removed)
 Modified sections:
   - Technology Stack: iOS client section removed; WebSocket/SSE and APNs entries removed; AI
-    provider corrected to OpenAI `gpt-4o-mini`
+    provider corrected to OpenAI `gpt-6-luna`
   - Development Standards → Authentication: unauthenticated routes now `login`, `refresh`,
     `accept-invite`, `invite-info`; `register` removed, invitation stated as the sole
     account-creation path
@@ -72,7 +72,7 @@ The web app is the phone client: a responsive Progressive Web App designed for m
 
 ### AI Integration
 - **Provider:** OpenAI API
-- **Model:** `gpt-4o-mini` (multimodal)
+- **Model:** `gpt-6-luna` (multimodal)
 - **Invocation:** Server-side only — receipt images MUST NOT be sent to OpenAI from the client
 - **Output contract:** Structured JSON `{ store, date, items: [{ description, quantity, unitPrice }] }` with confidence flags
 

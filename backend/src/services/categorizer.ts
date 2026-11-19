@@ -79,7 +79,7 @@ export async function categorizeWithAI(
 
   const parsePromise = client.chat.completions
     .create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-6-luna',
       max_tokens: 2048,
       response_format: { type: 'json_object' },
       messages: [

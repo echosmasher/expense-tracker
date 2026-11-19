@@ -1,5 +1,5 @@
 /**
- * Receipt parsing service — uses OpenAI multimodal (gpt-4o-mini) to extract
+ * Receipt parsing service — uses OpenAI multimodal (gpt-6-luna) to extract
  * structured data from a receipt image (Norwegian/Swedish/English).
  *
  * 15-second timeout enforced via AbortSignal so the underlying request is
@@ -71,7 +71,7 @@ export async function parseReceipt(imageBuffer: Buffer, mimeType: string): Promi
   try {
     const response = await client.chat.completions.create(
       {
-        model: 'gpt-4o-mini',
+        model: 'gpt-6-luna',
         max_tokens: 2048,
         response_format: { type: 'json_object' },
         messages: [
