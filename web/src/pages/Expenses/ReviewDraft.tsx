@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { expenses, projects, CURRENCIES } from '@expense-tracker/shared'
+import { expenses, projects, categories, CURRENCIES } from '@expense-tracker/shared'
 import type { Expense } from '@expense-tracker/shared'
 import { useHouseholdStore } from '../../stores/householdStore'
 import { useExpenseStore } from '../../stores/expenseStore'
@@ -111,6 +111,26 @@ export function ReviewDraft() {
     // exactOptionalPropertyTypes rejects `{ field: undefined }`.
     const body = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
     try {
+      if (typeof body.categoryName === 'string') {
+        // The line-item PATCH routes only understand categoryId. A category is
+        // picked (or typed in as new) by name, so household drafts go through
+        // the category route, which find-or-creates it and saves the mapping.
+        const name = body.categoryName
+        if (projectId) {
+          const { categories: list } = await categories.list(householdId!)
+          const match = list.find((c) => c.name.toLowerCase() === name.toLowerCase())
+          if (!match) {
+            setError('New categories can only be created from a household expense.')
+            return
+          }
+          setExpense(await projects.updateLineItem(projectId, expenseId, lineItemId, { categoryId: match.id }))
+        } else {
+          await categories.updateLineItemCategory(householdId!, expenseId, lineItemId, name)
+          setExpense(await expenses.get(householdId!, expenseId))
+        }
+        setError(null)
+        return
+      }
       if (projectId) {
         // Project draft line-item edits return the full updated expense.
         setExpense(await projects.updateLineItem(projectId, expenseId, lineItemId, body))
