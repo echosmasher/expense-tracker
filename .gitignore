@@ -40,3 +40,6 @@ Thumbs.db
 
 # Session handoff notes - local scratch, never committed
 HANDOFF.md
+
+# Database backups (pg_dump output) - local only
+backups/
