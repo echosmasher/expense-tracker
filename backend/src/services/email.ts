@@ -1,8 +1,33 @@
 import { Resend } from 'resend'
+import { logger } from '../logger.js'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.EMAIL_FROM ?? 'noreply@expensetracker.app'
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
+
+/**
+ * Send one email, logging any failure instead of dropping it.
+ *
+ * Resend reports delivery problems (unverified domain, bad API key, rate
+ * limit) by *returning* `{ error }` rather than throwing, so a bare
+ * `await resend.emails.send(...)` makes a failed send look like a success.
+ * This never throws either: both callers have already committed their
+ * database changes (the invite row, the settlement) by the time the email
+ * goes out, so failing the request would leave a created-but-"errored"
+ * record and tempt a retry. The failure is logged at error level instead —
+ * `docker compose logs api | grep "Email delivery failed"`.
+ */
+async function deliver(
+  kind: 'invite' | 'settlement-ready',
+  message: Parameters<typeof resend.emails.send>[0]
+): Promise<void> {
+  try {
+    const { error } = await resend.emails.send(message)
+    if (error) logger.error({ kind, emailError: error }, 'Email delivery failed')
+  } catch (err) {
+    logger.error({ kind, err }, 'Email delivery failed')
+  }
+}
 
 // ─── Invite email ────────────────────────────────────────────────────────────
 
@@ -19,7 +44,7 @@ export async function sendInviteEmail(params: {
     console.log(`[invite] ${params.to} → ${link}`)
   }
 
-  await resend.emails.send({
+  await deliver('invite', {
     from: FROM,
     to: params.to,
     subject: `You've been invited to join ${params.householdName}`,
@@ -61,7 +86,7 @@ export async function sendSettlementReadyEmail(params: {
     console.log(`[settlement] ${params.to.join(', ')} → ${settleUrl}`)
   }
 
-  await resend.emails.send({
+  await deliver('settlement-ready', {
     from: FROM,
     to: params.to,
     subject: `Settlement ready for ${params.householdName} — ${params.periodLabel}`,
