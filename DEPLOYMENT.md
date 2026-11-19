@@ -1,6 +1,6 @@
 # Deployment
 
-Operational checklist for hosting this app on a real machine reachable at a real domain. Reflects the state of the codebase as of 2026-09-13 (post-spec-004, ticket 11 — public deployment via Cloudflare Tunnel).
+Operational checklist for hosting this app on a real machine reachable at a real domain. Reflects the state of the codebase as of 2026-11-19 (post-spec-005 — multi-currency; OpenAI model `gpt-6-luna`; Node 22 runtime).
 
 > There are older notes in `resources/deployment-guide.md` and `resources/server-deploy.md`. This file is the current one — start here.
 
@@ -136,7 +136,7 @@ Migrations don't run automatically. After the `db` and `api` services are health
 docker compose exec api npm run migrate:prod
 ```
 
-Expect to see every migration from `001_create_all_tables.sql` through `008_settlement_expenses_snapshot.sql` listed. On a fresh database all will be `apply`. On an upgrade only new ones will be `apply` — the rest `skip`.
+Expect to see every migration from `001_create_all_tables.sql` through the newest file in `backend/src/db/migrations/` (currently `011_currency.sql`) listed. On a fresh database all will be `apply`. On an upgrade only new ones will be `apply` — the rest `skip`.
 
 Re-run this after any future deploy that adds files to `backend/src/db/migrations/`.
 
@@ -250,14 +250,36 @@ Notes:
 
 ## Step 10 — Updates
 
+**Always rebuild both `api` and `web`, and run migrations before anyone uses the app.** The two
+images are versioned together: a new API against an old frontend (or an un-migrated database)
+fails in confusing ways — typically every page goes blank because the first request after login
+returns a 500.
+
 ```bash
 git pull
-docker compose build              # rebuild api + web with new code
-docker compose up -d               # rolling restart
-docker compose exec api npm run migrate:prod   # if any new migration files
+git log --oneline -5 -- backend/src/db/migrations   # new migrations since your last deploy?
+
+# Back up first if any migration is new — migrations do not roll back.
+mkdir -p backups
+docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" expense_tracker' | gzip > backups/db-$(date +%Y%m%d).sql.gz
+
+docker compose build api web      # rebuild with the new code
+docker compose up -d api web      # restart them
+docker compose exec api npm run migrate:prod   # applies any new migration files
 ```
 
+Then hard-refresh the browser (or clear site data): the app is a PWA and its service worker can
+keep serving the previous bundle.
+
 If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step picks it up. There's no separate `npm install` step on the host — everything happens inside the image builds.
+
+> **Don't use `$POSTGRES_USER` in a bare host command.** It lives in `.env`, which Docker Compose
+> reads but your shell does not, so it expands to nothing (and `psql` then fails with
+> `role "root" does not exist`). Expand it inside the container with `sh -c '...'`, as above.
+
+> **Checking the API after a deploy:** `docker compose logs api` is dominated by the container
+> healthcheck. Filter it: `docker compose logs -f api | grep -v '"url":"/health"'`. Raw logs include
+> `Authorization` headers — redact them before sharing.
 
 ## Troubleshooting
 
@@ -265,7 +287,9 @@ If `package.json` changed in `shared/`, `web/`, or `backend/`, the build step pi
 |---|---|
 | Login works but page is blank | Browser console — usually CORS. Check `WEB_ORIGIN` matches `APP_URL` exactly (https vs http, trailing slash). |
 | Invite emails not arriving | `docker compose logs api \| grep -i resend`. Also check the Resend dashboard for delivery logs. Common cause: domain not yet verified or `EMAIL_FROM` not on the verified domain. |
+| Every page is blank after a deploy; API logs show `column ... does not exist` | The API image is newer than the database. Run `docker compose exec api npm run migrate:prod`, rebuild `web` too (Step 10), then hard-refresh. |
 | Settlement triggers but transaction "Mark paid" fails | `docker compose logs api` near the request time. Spec 003 changed the close handler; if you see `column does not exist`, you're missing migration 008. |
+| Receipt scan returns zero items and a zero amount | The parse failed and the app fell back to empty. `docker compose logs api \| grep "Receipt parse failed"` shows the reason. `400 Unsupported parameter` means the model rejects a request parameter (the code uses `max_completion_tokens`, which newer OpenAI models require); a `404` / "model does not exist" means the OpenAI project has no access to the model named in `receiptParser.ts` / `categorizer.ts`. |
 | Receipt upload "AI parse failed" | Either `OPENAI_API_KEY` invalid/out of credits, or the 15s timeout fired. Logs in `api` will show which. The app falls back to empty line items — user can fill them in manually. |
 | Receipt/avatar images 403 or 404 | Images render through the API (`GET .../receipt`, `GET /users/me/avatar`), not MinIO directly. Check `docker compose logs api` for the actual authorization failure. |
 | "client password must be a string" on `npm run migrate:prod` | `.env` not loaded. Should not happen via `docker compose exec api npm run migrate:prod` (env vars come from the container). |

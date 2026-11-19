@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/ ./shared/
@@ -25,7 +25,7 @@ RUN npm run build
 # but migrate.ts resolves MIGRATIONS_DIR relative to its own compiled location.
 RUN cp -r src/db/migrations dist/db/migrations
 
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY shared/ ./shared/
