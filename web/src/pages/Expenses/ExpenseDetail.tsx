@@ -325,6 +325,7 @@ export function ExpenseDetail() {
   const navigate = useNavigate()
   const household = useHouseholdStore((s) => s.household)
   const addOrUpdateExpense = useExpenseStore((s) => s.addOrUpdateExpense)
+  const removeExpense = useExpenseStore((s) => s.removeExpense)
   const storedExpenses = useExpenseStore((s) => s.expenses)
 
   const [expense, setExpense] = useState<Expense | null>(null)
@@ -332,6 +333,8 @@ export function ExpenseDetail() {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [correctingRate, setCorrectingRate] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const receiptObjectUrl = useAuthenticatedImage(expense?.receiptImageUrl)
   const isOnline = useOnlineStatus()
 
@@ -360,6 +363,21 @@ export function ExpenseDetail() {
       setError(err?.message ?? 'Failed to confirm expense.')
     } finally {
       setConfirming(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!household || !expenseId) return
+    if (!window.confirm('Delete this expense permanently? The receipt image is removed too. This cannot be undone.')) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await expenses.delete(household.id, expenseId)
+      removeExpense(expenseId)
+      navigate('/expenses', { replace: true })
+    } catch (err: any) {
+      setDeleteError(err?.message ?? 'Failed to delete expense.')
+      setDeleting(false)
     }
   }
 
@@ -532,6 +550,15 @@ export function ExpenseDetail() {
           {expense.status === 'settled' && (
             <div className="detail-settled-banner">
               ✓ Settled
+            </div>
+          )}
+
+          {expense.status !== 'settled' && !expense.openSettlementId && (
+            <div className="detail-delete">
+              <button className="delete-btn" disabled={deleting || !isOnline} onClick={handleDelete}>
+                {deleting ? 'Deleting…' : 'Delete expense'}
+              </button>
+              {deleteError && <p className="detail-delete-error">{deleteError}</p>}
             </div>
           )}
 
@@ -728,6 +755,11 @@ export function ExpenseDetail() {
         }
         .confirm-btn:hover { background: var(--accent-hover); }
         .confirm-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .detail-delete { margin-top: 1.5rem; text-align: center; }
+        .delete-btn { background: none; border: 1px solid var(--border-input); border-radius: 8px; color: #f87171; font-size: 0.85rem; padding: 0.5rem 1rem; cursor: pointer; font-family: inherit; }
+        .delete-btn:hover { border-color: #f87171; }
+        .delete-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .detail-delete-error { color: #f87171; font-size: 0.8rem; margin: 0.5rem 0 0; }
         .detail-confirmed-banner, .detail-settled-banner {
           background: rgba(34,197,94,0.08);
           border: 1px solid rgba(34,197,94,0.2);

@@ -20,6 +20,7 @@ import {
   computeForeignLineAmounts,
   correctExpenseRate,
   CorrectRateSchema,
+  deleteExpense,
 } from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
 
@@ -646,6 +647,23 @@ router.post('/:expenseId/line-items', async (req, res, next) => {
 
     const updated = await getFullExpense(expenseId, { householdId })
     res.status(201).json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── DELETE /households/:householdId/expenses/:expenseId ─────────────────────
+// Remove a draft or confirmed expense and its receipt image. Any active
+// member may delete; settled / in-settlement expenses are refused (409).
+
+router.delete('/:expenseId', async (req, res, next) => {
+  try {
+    const { householdId, expenseId } = req.params as { householdId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireActiveMember(householdId, userId)
+
+    await deleteExpense(expenseId, { householdId })
+    res.status(204).end()
   } catch (err) {
     next(err)
   }

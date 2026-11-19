@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3'
@@ -67,4 +68,9 @@ export async function getObject(key: string): Promise<StoredObject> {
     body: result.Body as Readable,
     contentType: result.ContentType ?? 'application/octet-stream',
   }
+}
+
+/** Remove an object. Deleting a key that does not exist is not an error in S3/MinIO. */
+export async function deleteObject(key: string): Promise<void> {
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }))
 }

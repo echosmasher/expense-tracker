@@ -348,6 +348,11 @@ export const expenses = {
       method: 'DELETE',
     }),
 
+  /** Permanently delete a draft or confirmed expense and its receipt image.
+   * 409 EXPENSE_SETTLED / IN_OPEN_SETTLEMENT once a settlement has captured it. */
+  delete: (householdId: string, expenseId: string) =>
+    request<void>(`/households/${householdId}/expenses/${expenseId}`, { method: 'DELETE' }),
+
   /** Correct a foreign-currency expense's rate (spec 005, ticket 15): a new
    * rate directly, or the actual home-currency amount charged, from which
    * the rate is derived. Exactly one of the two must be supplied. */
@@ -490,6 +495,9 @@ export const projects = {
     request<Expense>(`/projects/${projectId}/expenses/${expenseId}/line-items/${lineItemId}`, {
       method: 'DELETE',
     }),
+
+  deleteExpense: (projectId: string, expenseId: string) =>
+    request<void>(`/projects/${projectId}/expenses/${expenseId}`, { method: 'DELETE' }),
 
   correctExpenseRate: (projectId: string, expenseId: string, body: { rateScaled: number } | { actualHomeTotalOre: number }) =>
     request<Expense>(`/projects/${projectId}/expenses/${expenseId}/rate`, {

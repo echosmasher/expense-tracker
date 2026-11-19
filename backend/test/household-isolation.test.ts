@@ -907,6 +907,38 @@ describe('household isolation: project expense receipt images', () => {
   })
 })
 
+describe('household isolation: deleting expenses', () => {
+  it('rejects an unauthenticated delete of a household expense', async () => {
+    const res = await request(app).delete(`/api/v1/households/${householdA}/expenses/${expenseA}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('cannot delete another household’s expense', async () => {
+    const res = await asBob(request(app).delete(`/api/v1/households/${householdA}/expenses/${expenseA}`))
+    expect(res.status).toBe(403)
+  })
+
+  it('cannot delete a foreign expense through own household URL (ID stuffing)', async () => {
+    const res = await asBob(request(app).delete(`/api/v1/households/${householdB}/expenses/${expenseA}`))
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects an unauthenticated delete of a project expense', async () => {
+    const res = await request(app).delete(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('cannot delete a project expense as a non-member', async () => {
+    const res = await asBob(request(app).delete(`/api/v1/projects/${projectA}/expenses/${projectExpenseA}`))
+    expect(res.status).toBe(403)
+  })
+
+  it('leaves every targeted expense intact after the rejected attempts', async () => {
+    const res = await db.query('SELECT id FROM expenses WHERE id = ANY($1)', [[expenseA, projectExpenseA]])
+    expect(res.rows).toHaveLength(2)
+  })
+})
+
 describe('user isolation: avatar', () => {
   it('rejects an unauthenticated request for an avatar', async () => {
     const res = await request(app).get('/api/v1/users/me/avatar')

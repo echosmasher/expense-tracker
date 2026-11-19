@@ -18,6 +18,7 @@ import {
   getExpenseCurrencyContext,
   computeForeignLineAmounts,
   correctExpenseRate,
+  deleteExpense,
   CorrectRateSchema,
 } from '../../services/expenseView.js'
 import { getCurrency } from '@expense-tracker/shared'
@@ -718,6 +719,23 @@ projectDetailRouter.patch('/expenses/:expenseId/rate', async (req, res, next) =>
 
     const updated = await getFullExpense(expenseId, { projectId })
     res.json(updated)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// ─── DELETE /projects/:projectId/expenses/:expenseId ─────────────────────────
+// Same rules as the household route: any project member; settled or
+// in-settlement expenses are refused (409).
+
+projectDetailRouter.delete('/expenses/:expenseId', async (req, res, next) => {
+  try {
+    const { projectId, expenseId } = req.params as { projectId: string; expenseId: string }
+    const userId = req.user!.userId
+    await requireProjectMember(projectId, userId)
+
+    await deleteExpense(expenseId, { projectId })
+    res.status(204).end()
   } catch (err) {
     next(err)
   }

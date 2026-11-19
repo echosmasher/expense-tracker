@@ -9,6 +9,7 @@ import { db } from '../db/client.js'
 import { homeOre, deriveRate, distributeResidual, getCurrency } from '@expense-tracker/shared'
 import { AppError } from '../api/middleware/error.js'
 import { resolveRate } from './exchangeRates.js'
+import { deleteObject } from '../storage/minio.js'
 
 export type ExpenseScope = { householdId: string } | { projectId: string }
 
@@ -490,4 +491,63 @@ export async function recomputeExpenseTotal(expenseId: string): Promise<number> 
     [total, originalTotalMinor, expenseId]
   )
   return total
+}
+
+/**
+ * Permanently delete an expense (draft or confirmed) with its line items, and
+ * its receipt image. An expense that is settled, or sits in any settlement
+ * snapshot, is refused — a settlement's figures must never drift from the
+ * expenses they were built from (spec 003).
+ *
+ * The guard is part of the DELETE itself so a settlement triggered between a
+ * separate check and the delete cannot slip an expense out from under its
+ * snapshot. Line items go via ON DELETE CASCADE.
+ */
+export async function deleteExpense(expenseId: string, scope: ExpenseScope): Promise<void> {
+  const scopeColumn = 'householdId' in scope ? 'household_id' : 'project_id'
+  const scopeId = 'householdId' in scope ? scope.householdId : scope.projectId
+
+  const deleted = await db.query<{ receipt_image_key: string | null }>(
+    `DELETE FROM expenses e
+     WHERE e.id = $1 AND e.${scopeColumn} = $2
+       AND e.status <> 'settled'
+       AND NOT EXISTS (SELECT 1 FROM settlement_expenses se WHERE se.expense_id = e.id)
+     RETURNING e.receipt_image_key`,
+    [expenseId, scopeId]
+  )
+
+  const row = deleted.rows[0]
+  if (!row) {
+    // Nothing deleted: work out whether it was missing or protected.
+    const existing = await db.query<{ status: string }>(
+      `SELECT status FROM expenses WHERE id = $1 AND ${scopeColumn} = $2`,
+      [expenseId, scopeId]
+    )
+    const expense = existing.rows[0]
+    if (!expense) throw new AppError(404, 'EXPENSE_NOT_FOUND', 'Expense not found')
+    if (expense.status === 'settled') {
+      throw new AppError(409, 'EXPENSE_SETTLED', 'A settled expense cannot be deleted')
+    }
+    const openSettlementId = await findOpenSettlementId(expenseId)
+    throw new AppError(
+      409,
+      'IN_OPEN_SETTLEMENT',
+      openSettlementId
+        ? `Cannot delete: this expense is included in open settlement ${openSettlementId}`
+        : 'Cannot delete: this expense is part of a settlement'
+    )
+  }
+
+  // The row is already gone, so a storage hiccup must not fail the request —
+  // it would only leave an unreachable object behind. Skip the object if
+  // another expense still points at the same key.
+  const key = row.receipt_image_key
+  if (key) {
+    try {
+      const shared = await db.query('SELECT 1 FROM expenses WHERE receipt_image_key = $1 LIMIT 1', [key])
+      if (shared.rows.length === 0) await deleteObject(key)
+    } catch (err) {
+      console.warn('Receipt image cleanup failed:', key, err instanceof Error ? err.message : err)
+    }
+  }
 }

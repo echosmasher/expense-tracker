@@ -33,6 +33,7 @@ export function ProjectDetail() {
   const [summary, setSummary] = useState<ProjectSummary | null>(null)
   const [loading, setLoading] = useState(!project)
   const [finishing, setFinishing] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isOnline = useOnlineStatus()
 
@@ -59,6 +60,27 @@ export function ProjectDetail() {
     }
     fetchAll()
   }, [projectId])
+
+  async function handleDeleteExpense(expenseId: string) {
+    if (!projectId) return
+    if (!window.confirm('Delete this expense permanently? The receipt image is removed too. This cannot be undone.')) return
+    setDeletingId(expenseId)
+    setError(null)
+    try {
+      await projects.deleteExpense(projectId, expenseId)
+      // Totals and the provisional balance depend on the deleted expense.
+      const [expData, summaryData] = await Promise.all([
+        projects.listExpenses(projectId),
+        projects.getSummary(projectId),
+      ])
+      setExpenses(expData.expenses)
+      setSummary(summaryData)
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to delete expense.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   async function handleFinish() {
     if (!projectId) return
@@ -192,6 +214,16 @@ export function ProjectDetail() {
                       <div className="pd-exp-meta">{formatDate(exp.date)} · {exp.purchaserName}</div>
                     </div>
                     <span className="pd-exp-amount">{formatNok(exp.totalAmountOre)}</span>
+                    {exp.status !== 'settled' && (
+                      <button
+                        className="pd-exp-delete"
+                        aria-label={`Delete expense ${exp.store ?? 'Unknown'}`}
+                        disabled={deletingId === exp.id}
+                        onClick={() => handleDeleteExpense(exp.id)}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -253,6 +285,9 @@ export function ProjectDetail() {
         .pd-expense-item:last-child { border-bottom: none; }
         .pd-exp-store { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
         .pd-exp-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+        .pd-exp-delete { background: none; border: none; color: var(--text-muted, #888); cursor: pointer; font-size: 0.85rem; padding: 0.25rem 0.5rem; margin-left: 0.25rem; }
+        .pd-exp-delete:hover { color: #f87171; }
+        .pd-exp-delete:disabled { opacity: 0.4; cursor: not-allowed; }
         .pd-exp-amount { font-family: 'DM Mono', monospace; font-size: 0.875rem; color: var(--text-primary); flex-shrink: 0; }
         .pd-finish-area { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; }
         .pd-finish-hint { font-size: 0.85rem; color: var(--text-muted); margin: 0 0 1rem; line-height: 1.5; }
